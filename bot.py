@@ -3,7 +3,8 @@ import json
 import re
 import tempfile
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -18,7 +19,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import cm
 
 # ── Config Gemini ─────────────────────────────────────────────────────────────
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+client_gemini = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 # ── États ConversationHandler ────────────────────────────────────────────────
 ATTENTE_CORRECTION = 1
@@ -83,28 +84,23 @@ def extraire_lien(texte: str):
 # ── Gemini : transcription vocale ─────────────────────────────────────────────
 
 async def transcrire(file_path: str) -> str:
-    model = genai.GenerativeModel("gemini-2.0-flash")
-
     with open(file_path, "rb") as f:
         audio_data = f.read()
 
-    response = model.generate_content([
-        {
-            "inline_data": {
-                "mime_type": "audio/ogg",
-                "data": audio_data,
-            }
-        },
-        "Transcris exactement ce message vocal en gardant la langue originale "
-        "(français, arabe, anglais…). Réponds uniquement avec la transcription, "
-        "sans aucun texte autour."
-    ])
+    response = client_gemini.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[
+            types.Part.from_bytes(data=audio_data, mime_type="audio/ogg"),
+            "Transcris exactement ce message vocal en gardant la langue originale "
+            "(français, arabe, anglais…). Réponds uniquement avec la transcription, "
+            "sans aucun texte autour."
+        ]
+    )
     return response.text.strip()
 
-# ── Gemini : structuration de la note ────────────────────────────────────────
+# ── Gemini : structuration ────────────────────────────────────────────────────
 
 async def structurer(texte: str) -> dict:
-    model  = genai.GenerativeModel("gemini-2.0-flash")
     prompt = (
         "Tu es un assistant de prise de notes. Analyse ce texte et retourne UNIQUEMENT "
         "un objet JSON valide (sans markdown, sans texte autour) :\n\n"
@@ -113,7 +109,7 @@ async def structurer(texte: str) -> dict:
         '  "source": "titre du livre, cours, podcast… ou null",\n'
         '  "page": "numéro de page, chapitre, timestamp… ou null",\n'
         '  "donnee": "le mot, la date, la citation, le concept principal — dans la langue du texte",\n'
-        '  "explication": "définition, signification, contexte de la donnée — dans la langue du texte, ou null",\n'
+        '  "explication": "définition, signification, contexte — dans la langue du texte, ou null",\n'
         '  "est_arabe": true ou false\n'
         "}\n\n"
         "Règles :\n"
@@ -123,22 +119,25 @@ async def structurer(texte: str) -> dict:
         "- est_arabe = true si le texte contient des caractères arabes.\n\n"
         f"Texte : {texte}"
     )
-    response = model.generate_content(prompt)
-    contenu  = response.text.strip()
-    match    = re.search(r"\{.*\}", contenu, re.DOTALL)
+    response = client_gemini.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
+    contenu = response.text.strip()
+    match   = re.search(r"\{.*\}", contenu, re.DOTALL)
     if match:
         return json.loads(match.group())
     return {"categorie": "Libre", "source": None, "page": None,
             "donnee": texte, "explication": None, "est_arabe": False}
 
-# ── Gemini : traduction en français ──────────────────────────────────────────
+# ── Gemini : traduction ───────────────────────────────────────────────────────
 
 async def traduire_fr(texte: str) -> str:
     if not texte:
         return ""
-    model    = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(
-        f"Traduis ce texte en français. Réponds uniquement avec la traduction :\n\n{texte}"
+    response = client_gemini.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=f"Traduis ce texte en français. Réponds uniquement avec la traduction :\n\n{texte}"
     )
     return response.text.strip()
 
@@ -185,7 +184,6 @@ async def traiter(update: Update, texte_brut: str):
         "lien":          lien,
     }
 
-    # Confirmation si note libre sans source
     if note["categorie"] == "Libre" and not note["source"]:
         note_json = json.dumps(note, ensure_ascii=False)
         await msg.edit_text(
@@ -208,7 +206,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📚 *Bot de Notes*\n\n"
         "Envoie un *vocal* ou un *texte* — je structure et sauvegarde dans Google Sheets\\.\n\n"
-        "Exemples de dictée :\n"
+        "Exemples :\n"
         "• _\"Atomic Habits page 47, la règle des 1%…\"_\n"
         "• _\"Cours de philo chapitre 3, le stoïcisme c'est…\"_\n"
         "• _\"كتاب العادات صفحة 12…\"_ → traduction FR auto\n"
