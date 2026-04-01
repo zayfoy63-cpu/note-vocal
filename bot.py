@@ -23,18 +23,18 @@ client_gemini = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 # ── États ConversationHandler ────────────────────────────────────────────────
 ATTENTE_CORRECTION = 1
+ATTENTE_CHAMP      = 2
+ATTENTE_VALEUR     = 3
 
 # ── Colonnes Google Sheets ───────────────────────────────────────────────────
 COLONNES = ["Thème", "Source", "Référence", "Donnée", "Explication", "Traduction FR", "Lien"]
 SCOPES   = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Thèmes principaux — le bot peut en créer d'autres si nécessaire
 THEMES_PRINCIPAUX = [
     "Philosophie", "Religion", "Psychologie", "Économie", "Finance",
     "Histoire", "Sciences", "Développement personnel", "Politique"
 ]
 
-# ── Stockage temporaire notes en attente ─────────────────────────────────────
 notes_en_attente = {}
 
 # ── Google Sheets ────────────────────────────────────────────────────────────
@@ -95,7 +95,6 @@ def extraire_lien(texte: str):
 async def transcrire(file_path: str) -> str:
     with open(file_path, "rb") as f:
         audio_data = f.read()
-
     response = client_gemini.models.generate_content(
         model="gemini-2.5-flash",
         contents=[
@@ -107,27 +106,62 @@ async def transcrire(file_path: str) -> str:
     )
     return response.text.strip()
 
-# ── Gemini : structuration ────────────────────────────────────────────────────
+# ── Gemini : détection intention ──────────────────────────────────────────────
+
+async def detecter_intention(texte: str) -> dict:
+    """
+    Détecte si le texte est une commande ou une nouvelle note.
+    Retourne un dict avec 'type' et 'details'.
+    """
+    prompt = (
+        "Analyse ce texte et détermine l'intention. "
+        "Réponds UNIQUEMENT en JSON valide (sans markdown) :\n\n"
+        "{\n"
+        '  "type": "note | recherche | afficher | modifier | modifier_champ | supprimer | doute",\n'
+        '  "mot_cle": "le mot ou sujet mentionné pour recherche/modification/suppression, ou null",\n'
+        '  "champ": "le champ à modifier si précisé : theme|source|reference|donnee|explication|lien, ou null",\n'
+        '  "nouvelle_valeur": "la nouvelle valeur si précisée dans le texte, ou null"\n'
+        "}\n\n"
+        "Règles :\n"
+        "- 'note' : c'est une information à sauvegarder (fait, citation, concept, réflexion)\n"
+        "- 'recherche' : contient cherche, trouve, search, ابحث, حوث ou similaire\n"
+        "- 'afficher' : contient montre, affiche, dernières notes, liste ou similaire\n"
+        "- 'modifier' : contient modifie, change, corrige, عدل, بدل ou similaire\n"
+        "- 'modifier_champ' : modifie un champ précis, ex 'ajoute dans l'explication de X que...'\n"
+        "- 'supprimer' : contient supprime, efface, احذف ou similaire\n"
+        "- 'doute' : impossible de déterminer clairement\n\n"
+        f"Texte : {texte}"
+    )
+    response = client_gemini.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+    contenu = response.text.strip()
+    match   = re.search(r"\{.*\}", contenu, re.DOTALL)
+    if match:
+        return json.loads(match.group())
+    return {"type": "note", "mot_cle": None, "champ": None, "nouvelle_valeur": None}
+
+# ── Gemini : structuration note ───────────────────────────────────────────────
 
 async def structurer(texte: str) -> dict:
     themes_str = ", ".join(THEMES_PRINCIPAUX)
     prompt = (
         "Tu es un assistant de prise de notes intelligent. "
-        "Analyse ce texte et retourne UNIQUEMENT un objet JSON valide (sans markdown, sans texte autour) :\n\n"
+        "Analyse ce texte et retourne UNIQUEMENT un objet JSON valide (sans markdown) :\n\n"
         "{\n"
-        f'  "theme": "le thème principal parmi : {themes_str}. Si aucun ne correspond exactement, crée un thème pertinent en français",\n'
-        '  "source": "combine le type ET le nom : ex \'Livre : Atomic Habits\', \'Formation : XYZ\', \'Podcast : Huberman\', \'Film : Inception\', \'Documentaire : XYZ\', \'Verset : Sourate Al-Baqara\', \'Réflexion personnelle\'. null si aucune source.",\n'
-        '  "reference": "page, timestamp (ex: 12:34), numéro de sourate/verset, chapitre, épisode… null si absent",\n'
-        '  "donnee": "le mot, la date, la citation, le concept principal — dans la langue du texte",\n'
-        '  "explication": "définition, signification, contexte de la donnée — dans la langue du texte, null si absent",\n'
+        f'  "theme": "thème parmi : {themes_str}. Si aucun ne correspond, crée un thème pertinent en français",\n'
+        '  "source": "combine type ET nom : \'Livre : Atomic Habits\', \'Formation : XYZ\', \'Podcast : Huberman\', \'Film : Inception\', \'Documentaire : XYZ\', \'Verset : Sourate Al-Baqara\', \'Réflexion personnelle\'. null si absent.",\n'
+        '  "reference": "page, timestamp (12:34), sourate/verset, chapitre… null si absent",\n'
+        '  "donnee": "le concept principal — dans la langue du texte",\n'
+        '  "explication": "définition, signification, contexte — dans la langue du texte, null si absent",\n'
         '  "est_arabe": true ou false\n'
         "}\n\n"
-        "Règles importantes :\n"
-        "- La personne dicte librement dans n'importe quel ordre → déduis intelligemment où chaque info va.\n"
-        "- Pour 'source' : si la personne dit 'dans le livre X' → 'Livre : X', 'dans la formation X' → 'Formation : X', etc.\n"
-        "- Si aucune source identifiable → source=null, reference=null.\n"
+        "Règles :\n"
+        "- La personne dicte librement → déduis intelligemment où chaque info va.\n"
+        "- 'dans le livre X' → 'Livre : X', 'dans la formation X' → 'Formation : X'\n"
         "- Ne jamais dupliquer la même info dans donnee et explication.\n"
-        "- est_arabe = true si le texte contient de l'arabe ou du dialecte arabe.\n\n"
+        "- est_arabe = true si arabe ou dialecte arabe détecté.\n\n"
         f"Texte : {texte}"
     )
     response = client_gemini.models.generate_content(
@@ -171,9 +205,9 @@ def formater(note: dict) -> str:
             lignes.append(f"{emoji} *{label} :* {val}")
     return "\n".join(lignes)
 
-# ── Traitement d'un message ───────────────────────────────────────────────────
+# ── Traitement note ───────────────────────────────────────────────────────────
 
-async def traiter(update: Update, texte_brut: str):
+async def traiter_note(update: Update, texte_brut: str):
     texte, lien = extraire_lien(texte_brut)
     msg = await update.message.reply_text("✨ Analyse en cours…")
 
@@ -195,7 +229,6 @@ async def traiter(update: Update, texte_brut: str):
         "lien":          lien,
     }
 
-    # Note sans source → confirmation
     if not note["source"]:
         note_id = str(update.message.message_id)
         notes_en_attente[note_id] = note
@@ -213,24 +246,152 @@ async def traiter(update: Update, texte_brut: str):
     save_to_sheet(note)
     await msg.edit_text(f"✅ *Sauvegardée !*\n\n{formater(note)}", parse_mode="Markdown")
 
-# ── Commandes ─────────────────────────────────────────────────────────────────
+# ── Traitement commande vocale ────────────────────────────────────────────────
+
+async def traiter_commande(update: Update, context: ContextTypes.DEFAULT_TYPE,
+                            intention: dict, texte: str):
+    t    = intention.get("type")
+    mot  = intention.get("mot_cle") or ""
+    champ = intention.get("champ")
+    valeur = intention.get("nouvelle_valeur")
+
+    # AFFICHER
+    if t == "afficher":
+        notes = get_all_notes()
+        if not notes:
+            await update.message.reply_text("Aucune note pour l'instant.")
+            return
+        await update.message.reply_text(f"📋 Tes 5 dernières notes :")
+        for note in notes[-5:][::-1]:
+            await update.message.reply_text(formater(note), parse_mode="Markdown")
+
+    # RECHERCHE
+    elif t == "recherche":
+        if not mot:
+            await update.message.reply_text("Je n'ai pas compris le mot à chercher. Précise davantage.")
+            return
+        resultats = [(i+2, n) for i, n in enumerate(get_all_notes()) if mot.lower() in str(n).lower()]
+        if not resultats:
+            await update.message.reply_text(f"🔍 Aucun résultat pour « {mot} ».")
+            return
+        await update.message.reply_text(f"🔍 {len(resultats)} résultat(s) pour « {mot} » :")
+        for _, note in resultats[-5:]:
+            await update.message.reply_text(formater(note), parse_mode="Markdown")
+
+    # MODIFIER CHAMP PRÉCIS
+    elif t == "modifier_champ" and mot and champ and valeur:
+        resultats = [(i+2, n) for i, n in enumerate(get_all_notes()) if mot.lower() in str(n).lower()]
+        if not resultats:
+            await update.message.reply_text(f"Aucune note trouvée pour « {mot} ».")
+            return
+        row, note = resultats[0]
+        # Convertir clé Sheets vers clé interne
+        champ_map = {
+            "theme": "Thème", "source": "Source", "reference": "Référence",
+            "donnee": "Donnée", "explication": "Explication",
+            "traduction_fr": "Traduction FR", "lien": "Lien"
+        }
+        note_modif = {
+            "theme":         note.get("Thème", ""),
+            "source":        note.get("Source", ""),
+            "reference":     note.get("Référence", ""),
+            "donnee":        note.get("Donnée", ""),
+            "explication":   note.get("Explication", ""),
+            "traduction_fr": note.get("Traduction FR", ""),
+            "lien":          note.get("Lien", ""),
+        }
+        note_modif[champ] = valeur
+        update_row(row, note_modif)
+        label = champ_map.get(champ, champ)
+        await update.message.reply_text(
+            f"✅ *{label}* mis à jour !\n\n{formater(note_modif)}",
+            parse_mode="Markdown"
+        )
+
+    # MODIFIER (toute la note)
+    elif t == "modifier":
+        if not mot:
+            await update.message.reply_text("Précise quelle note modifier. Ex : *'modifie la note sur le stoïcisme'*", parse_mode="Markdown")
+            return
+        resultats = [(i+2, n) for i, n in enumerate(get_all_notes()) if mot.lower() in str(n).lower()]
+        if not resultats:
+            await update.message.reply_text(f"Aucune note trouvée pour « {mot} ».")
+            return
+        row, note = resultats[0]
+        context.user_data["row"]  = row
+        context.user_data["note"] = note
+        await update.message.reply_text(
+            f"📝 Note trouvée :\n\n{formater(note)}\n\nDicte ou tape la version corrigée :",
+            parse_mode="Markdown",
+        )
+        return ATTENTE_CORRECTION
+
+    # SUPPRIMER
+    elif t == "supprimer":
+        if not mot:
+            await update.message.reply_text("Précise quelle note supprimer.")
+            return
+        resultats = [(i+2, n) for i, n in enumerate(get_all_notes()) if mot.lower() in str(n).lower()]
+        if not resultats:
+            await update.message.reply_text(f"Aucune note trouvée pour « {mot} ».")
+            return
+        row, note = resultats[0]
+        note_id   = f"del_{row}"
+        notes_en_attente[note_id] = {"row": row}
+        await update.message.reply_text(
+            f"🗑️ Supprimer cette note ?\n\n{formater(note)}",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ Oui", callback_data=f"delete|{note_id}"),
+                InlineKeyboardButton("❌ Non", callback_data=f"cancel|{note_id}"),
+            ]])
+        )
+
+    # DOUTE
+    elif t == "doute":
+        note_id = str(update.message.message_id)
+        notes_en_attente[note_id] = {"texte": texte}
+        await update.message.reply_text(
+            f"🤔 C'est une nouvelle note ou une commande ?",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📝 Nouvelle note", callback_data=f"note|{note_id}"),
+                InlineKeyboardButton("⚙️ Commande",      callback_data=f"cmd|{note_id}"),
+            ]])
+        )
+
+# ── Handler principal vocal/texte ─────────────────────────────────────────────
+
+async def handler_principal(update: Update, context: ContextTypes.DEFAULT_TYPE, texte: str):
+    intention = await detecter_intention(texte)
+    t = intention.get("type")
+
+    if t == "note":
+        await traiter_note(update, texte)
+    else:
+        await traiter_commande(update, context, intention, texte)
+
+# ── Commandes Telegram ────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📚 *Bot de Notes*\n\n"
-        "Envoie un *vocal* ou un *texte* — je structure et sauvegarde dans Google Sheets\\.\n\n"
-        "Exemples :\n"
+        "Envoie un *vocal* ou un *texte* — je détecte automatiquement si c'est une note ou une commande\\.\n\n"
+        "*Exemples de notes :*\n"
         "• _\"Dans le livre Atomic Habits page 47, la règle des 1%…\"_\n"
-        "• _\"Formation marketing, module 3, le tunnel de vente c'est…\"_\n"
-        "• _\"Podcast Huberman à 12:34, le sommeil et la mémoire…\"_\n"
-        "• _\"Verset Sourate Al\\-Baqara 286, لا يكلف الله…\"_ → traduction FR auto\n"
-        "• _\"J'ai une réflexion sur la discipline…\"_ → sans source\n\n"
-        "*Commandes :*\n"
+        "• _\"Formation marketing module 3, le tunnel de vente…\"_\n"
+        "• _\"Verset Sourate Al\\-Baqara 286…\"_ → traduction FR auto\n\n"
+        "*Exemples de commandes vocales :*\n"
+        "• _\"Cherche mes notes sur la philosophie\"_\n"
+        "• _\"Montre mes dernières notes\"_\n"
+        "• _\"Modifie la note sur les habitudes\"_\n"
+        "• _\"Ajoute dans l'explication de Atomic Habits que…\"_\n"
+        "• _\"Supprime la note sur le stoïcisme\"_\n\n"
+        "*Commandes texte :*\n"
         "/notes — 5 dernières notes\n"
         "/chercher \\[mot\\] — rechercher\n"
-        "/modifier \\[mot\\] — modifier une note\n"
-        "/supprimer \\[mot\\] — supprimer une note\n"
-        "/export — toutes les notes en PDF",
+        "/modifier \\[mot\\] — modifier\n"
+        "/supprimer \\[mot\\] — supprimer\n"
+        "/export — PDF",
         parse_mode="MarkdownV2",
     )
 
@@ -249,10 +410,10 @@ async def cmd_vocal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os.unlink(path)
 
     await msg.edit_text(f"🗣️ _{texte}_", parse_mode="Markdown")
-    await traiter(update, texte)
+    await handler_principal(update, context, texte)
 
 async def cmd_texte(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await traiter(update, update.message.text)
+    await handler_principal(update, context, update.message.text)
 
 async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notes = get_all_notes()
@@ -329,7 +490,6 @@ async def cmd_supprimer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not resultats:
         await update.message.reply_text(f"Aucun résultat pour « {q} ».")
         return
-
     row, note = resultats[0]
     note_id   = f"del_{row}"
     notes_en_attente[note_id] = {"row": row}
@@ -405,6 +565,20 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(f"✅ *Sauvegardée !*\n\n{formater(note)}", parse_mode="Markdown")
         else:
             await q.edit_message_text("❌ Note expirée, renvoie-la.")
+
+    elif data.startswith("note|"):
+        note_id = data[5:]
+        info    = notes_en_attente.pop(note_id, None)
+        if info and "texte" in info:
+            await traiter_note(update, info["texte"])
+
+    elif data.startswith("cmd|"):
+        note_id  = data[4:]
+        info     = notes_en_attente.pop(note_id, None)
+        if info and "texte" in info:
+            intention = await detecter_intention(info["texte"])
+            intention["type"] = "recherche" if not intention.get("type") else intention["type"]
+            await traiter_commande(update, context, intention, info["texte"])
 
     elif data.startswith("delete|"):
         note_id = data[7:]
