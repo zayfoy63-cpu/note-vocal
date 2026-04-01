@@ -25,10 +25,16 @@ client_gemini = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 ATTENTE_CORRECTION = 1
 
 # ── Colonnes Google Sheets ───────────────────────────────────────────────────
-COLONNES = ["Catégorie", "Source", "Page", "Donnée", "Explication", "Traduction FR", "Lien"]
+COLONNES = ["Thème", "Source", "Référence", "Donnée", "Explication", "Traduction FR", "Lien"]
 SCOPES   = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# ── Stockage temporaire des notes en attente de confirmation ─────────────────
+# Thèmes principaux — le bot peut en créer d'autres si nécessaire
+THEMES_PRINCIPAUX = [
+    "Philosophie", "Religion", "Psychologie", "Économie", "Finance",
+    "Histoire", "Sciences", "Développement personnel", "Politique"
+]
+
+# ── Stockage temporaire notes en attente ─────────────────────────────────────
 notes_en_attente = {}
 
 # ── Google Sheets ────────────────────────────────────────────────────────────
@@ -47,9 +53,9 @@ def save_to_sheet(note: dict):
     sheet = get_sheet()
     init_sheet(sheet)
     sheet.append_row([
-        note.get("categorie",     ""),
+        note.get("theme",         ""),
         note.get("source",        ""),
-        note.get("page",          ""),
+        note.get("reference",     ""),
         note.get("donnee",        ""),
         note.get("explication",   ""),
         note.get("traduction_fr", ""),
@@ -61,9 +67,9 @@ def get_all_notes() -> list:
 
 def update_row(row_index: int, note: dict):
     get_sheet().update(f"A{row_index}:G{row_index}", [[
-        note.get("categorie",     ""),
+        note.get("theme",         ""),
         note.get("source",        ""),
-        note.get("page",          ""),
+        note.get("reference",     ""),
         note.get("donnee",        ""),
         note.get("explication",   ""),
         note.get("traduction_fr", ""),
@@ -104,21 +110,23 @@ async def transcrire(file_path: str) -> str:
 # ── Gemini : structuration ────────────────────────────────────────────────────
 
 async def structurer(texte: str) -> dict:
+    themes_str = ", ".join(THEMES_PRINCIPAUX)
     prompt = (
-        "Tu es un assistant de prise de notes. Analyse ce texte et retourne UNIQUEMENT "
-        "un objet JSON valide (sans markdown, sans texte autour) :\n\n"
+        "Tu es un assistant de prise de notes intelligent. "
+        "Analyse ce texte et retourne UNIQUEMENT un objet JSON valide (sans markdown, sans texte autour) :\n\n"
         "{\n"
-        '  "categorie": "Lecture | Cours | Podcast | Conférence | Idée | Libre",\n'
-        '  "source": "titre du livre, cours, podcast… ou null",\n'
-        '  "page": "numéro de page, chapitre, timestamp… ou null",\n'
+        f'  "theme": "le thème principal parmi : {themes_str}. Si aucun ne correspond exactement, crée un thème pertinent en français",\n'
+        '  "source": "combine le type ET le nom : ex \'Livre : Atomic Habits\', \'Formation : XYZ\', \'Podcast : Huberman\', \'Film : Inception\', \'Documentaire : XYZ\', \'Verset : Sourate Al-Baqara\', \'Réflexion personnelle\'. null si aucune source.",\n'
+        '  "reference": "page, timestamp (ex: 12:34), numéro de sourate/verset, chapitre, épisode… null si absent",\n'
         '  "donnee": "le mot, la date, la citation, le concept principal — dans la langue du texte",\n'
-        '  "explication": "définition, signification, contexte — dans la langue du texte, ou null",\n'
+        '  "explication": "définition, signification, contexte de la donnée — dans la langue du texte, null si absent",\n'
         '  "est_arabe": true ou false\n'
         "}\n\n"
-        "Règles :\n"
-        "- La personne dicte librement dans n'importe quel ordre → déduis où chaque info va.\n"
-        "- Si aucune source identifiable → categorie='Libre', source=null, page=null.\n"
-        "- Ne pas mettre la même info dans donnee et explication.\n"
+        "Règles importantes :\n"
+        "- La personne dicte librement dans n'importe quel ordre → déduis intelligemment où chaque info va.\n"
+        "- Pour 'source' : si la personne dit 'dans le livre X' → 'Livre : X', 'dans la formation X' → 'Formation : X', etc.\n"
+        "- Si aucune source identifiable → source=null, reference=null.\n"
+        "- Ne jamais dupliquer la même info dans donnee et explication.\n"
         "- est_arabe = true si le texte contient de l'arabe ou du dialecte arabe.\n\n"
         f"Texte : {texte}"
     )
@@ -130,7 +138,7 @@ async def structurer(texte: str) -> dict:
     match   = re.search(r"\{.*\}", contenu, re.DOTALL)
     if match:
         return json.loads(match.group())
-    return {"categorie": "Libre", "source": None, "page": None,
+    return {"theme": "Autre", "source": None, "reference": None,
             "donnee": texte, "explication": None, "est_arabe": False}
 
 # ── Gemini : traduction ───────────────────────────────────────────────────────
@@ -148,9 +156,9 @@ async def traduire_fr(texte: str) -> str:
 
 def formater(note: dict) -> str:
     champs = [
-        ("🏷", "categorie",     "Catégorie"),
-        ("📖", "source",        "Source"),
-        ("📄", "page",          "Page"),
+        ("🎯", "theme",         "Thème"),
+        ("📚", "source",        "Source"),
+        ("📍", "reference",     "Référence"),
         ("💡", "donnee",        "Donnée"),
         ("💬", "explication",   "Explication"),
         ("🇫🇷", "traduction_fr", "Traduction FR"),
@@ -178,22 +186,22 @@ async def traiter(update: Update, texte_brut: str):
         traduction = await traduire_fr(" — ".join(parties))
 
     note = {
-        "categorie":     data.get("categorie")   or "Libre",
+        "theme":         data.get("theme")       or "Autre",
         "source":        data.get("source")      or "",
-        "page":          str(data.get("page"))   if data.get("page") else "",
+        "reference":     str(data.get("reference")) if data.get("reference") else "",
         "donnee":        data.get("donnee")      or texte,
         "explication":   data.get("explication") or "",
         "traduction_fr": traduction,
         "lien":          lien,
     }
 
-    # Note libre → confirmation via ID en mémoire (évite le JSON trop long dans le bouton)
-    if note["categorie"] == "Libre" and not note["source"]:
+    # Note sans source → confirmation
+    if not note["source"]:
         note_id = str(update.message.message_id)
         notes_en_attente[note_id] = note
         await msg.edit_text(
             f"ℹ️ Aucune source détectée.\n\n{formater(note)}\n\n"
-            "Je classe en *Note libre* — c'est correct ?",
+            "Je classe sans source — c'est correct ?",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("✅ Sauvegarder", callback_data=f"save|{note_id}"),
@@ -212,10 +220,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📚 *Bot de Notes*\n\n"
         "Envoie un *vocal* ou un *texte* — je structure et sauvegarde dans Google Sheets\\.\n\n"
         "Exemples :\n"
-        "• _\"Atomic Habits page 47, la règle des 1%…\"_\n"
-        "• _\"Cours de philo chapitre 3, le stoïcisme c'est…\"_\n"
-        "• _\"كتاب العادات صفحة 12…\"_ → traduction FR auto\n"
-        "• _\"J'ai une idée sur la discipline…\"_ → note libre\n\n"
+        "• _\"Dans le livre Atomic Habits page 47, la règle des 1%…\"_\n"
+        "• _\"Formation marketing, module 3, le tunnel de vente c'est…\"_\n"
+        "• _\"Podcast Huberman à 12:34, le sommeil et la mémoire…\"_\n"
+        "• _\"Verset Sourate Al\\-Baqara 286, لا يكلف الله…\"_ → traduction FR auto\n"
+        "• _\"J'ai une réflexion sur la discipline…\"_ → sans source\n\n"
         "*Commandes :*\n"
         "/notes — 5 dernières notes\n"
         "/chercher \\[mot\\] — rechercher\n"
@@ -299,9 +308,9 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
         traduction = await traduire_fr(" — ".join(parties))
 
     note = {
-        "categorie":     data.get("categorie")   or "Libre",
+        "theme":         data.get("theme")       or "Autre",
         "source":        data.get("source")      or "",
-        "page":          str(data.get("page"))   if data.get("page") else "",
+        "reference":     str(data.get("reference")) if data.get("reference") else "",
         "donnee":        data.get("donnee")      or texte,
         "explication":   data.get("explication") or "",
         "traduction_fr": traduction,
@@ -360,7 +369,7 @@ async def cmd_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for n in notes
     ]
 
-    largeurs = [2.2*cm, 3*cm, 1.4*cm, 4.2*cm, 4.2*cm, 2.8*cm, 2.2*cm]
+    largeurs = [2.5*cm, 3.5*cm, 2*cm, 4*cm, 4*cm, 2.5*cm, 1.5*cm]
     table    = Table(donnees, colWidths=largeurs, repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND",    (0,0), (-1,0),  colors.HexColor("#3C3489")),
