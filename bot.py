@@ -28,6 +28,9 @@ ATTENTE_CORRECTION = 1
 COLONNES = ["Catégorie", "Source", "Page", "Donnée", "Explication", "Traduction FR", "Lien"]
 SCOPES   = ["https://www.googleapis.com/auth/spreadsheets"]
 
+# ── Stockage temporaire des notes en attente de confirmation ─────────────────
+notes_en_attente = {}
+
 # ── Google Sheets ────────────────────────────────────────────────────────────
 
 def get_sheet():
@@ -92,8 +95,8 @@ async def transcrire(file_path: str) -> str:
         contents=[
             types.Part.from_bytes(data=audio_data, mime_type="audio/ogg"),
             "Transcris exactement ce message vocal en gardant la langue originale "
-            "(français, arabe, anglais…). Réponds uniquement avec la transcription, "
-            "sans aucun texte autour."
+            "(français, arabe, dialecte tunisien, anglais…). "
+            "Réponds uniquement avec la transcription, sans aucun texte autour."
         ]
     )
     return response.text.strip()
@@ -116,7 +119,7 @@ async def structurer(texte: str) -> dict:
         "- La personne dicte librement dans n'importe quel ordre → déduis où chaque info va.\n"
         "- Si aucune source identifiable → categorie='Libre', source=null, page=null.\n"
         "- Ne pas mettre la même info dans donnee et explication.\n"
-        "- est_arabe = true si le texte contient des caractères arabes.\n\n"
+        "- est_arabe = true si le texte contient de l'arabe ou du dialecte arabe.\n\n"
         f"Texte : {texte}"
     )
     response = client_gemini.models.generate_content(
@@ -184,15 +187,17 @@ async def traiter(update: Update, texte_brut: str):
         "lien":          lien,
     }
 
+    # Note libre → confirmation via ID en mémoire (évite le JSON trop long dans le bouton)
     if note["categorie"] == "Libre" and not note["source"]:
-        note_json = json.dumps(note, ensure_ascii=False)
+        note_id = str(update.message.message_id)
+        notes_en_attente[note_id] = note
         await msg.edit_text(
             f"ℹ️ Aucune source détectée.\n\n{formater(note)}\n\n"
             "Je classe en *Note libre* — c'est correct ?",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Sauvegarder", callback_data=f"save|{note_json}"),
-                InlineKeyboardButton("❌ Annuler",     callback_data="cancel"),
+                InlineKeyboardButton("✅ Sauvegarder", callback_data=f"save|{note_id}"),
+                InlineKeyboardButton("❌ Annuler",     callback_data=f"cancel|{note_id}"),
             ]])
         )
         return
@@ -317,12 +322,14 @@ async def cmd_supprimer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     row, note = resultats[0]
+    note_id   = f"del_{row}"
+    notes_en_attente[note_id] = {"row": row}
     await update.message.reply_text(
         f"🗑️ Supprimer cette note ?\n\n{formater(note)}",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("✅ Oui", callback_data=f"delete|{row}"),
-            InlineKeyboardButton("❌ Non", callback_data="cancel"),
+            InlineKeyboardButton("✅ Oui", callback_data=f"delete|{note_id}"),
+            InlineKeyboardButton("❌ Non", callback_data=f"cancel|{note_id}"),
         ]])
     )
 
@@ -382,13 +389,26 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
 
     if data.startswith("save|"):
-        note = json.loads(data[5:])
-        save_to_sheet(note)
-        await q.edit_message_text(f"✅ *Sauvegardée !*\n\n{formater(note)}", parse_mode="Markdown")
+        note_id = data[5:]
+        note    = notes_en_attente.pop(note_id, None)
+        if note:
+            save_to_sheet(note)
+            await q.edit_message_text(f"✅ *Sauvegardée !*\n\n{formater(note)}", parse_mode="Markdown")
+        else:
+            await q.edit_message_text("❌ Note expirée, renvoie-la.")
+
     elif data.startswith("delete|"):
-        delete_row(int(data[7:]))
-        await q.edit_message_text("🗑️ Note supprimée.")
-    elif data == "cancel":
+        note_id = data[7:]
+        info    = notes_en_attente.pop(note_id, None)
+        if info:
+            delete_row(info["row"])
+            await q.edit_message_text("🗑️ Note supprimée.")
+        else:
+            await q.edit_message_text("❌ Note introuvable.")
+
+    elif data.startswith("cancel|"):
+        note_id = data[7:]
+        notes_en_attente.pop(note_id, None)
         await q.edit_message_text("❌ Annulé.")
 
 # ── Lancement ─────────────────────────────────────────────────────────────────
