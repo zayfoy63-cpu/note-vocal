@@ -88,7 +88,7 @@ async def transcrire(file_path: str) -> str:
         audio_data = f.read()
 
     response = client_gemini.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=[
             types.Part.from_bytes(data=audio_data, mime_type="audio/ogg"),
             "Transcris exactement ce message vocal en gardant la langue originale "
@@ -120,7 +120,7 @@ async def structurer(texte: str) -> dict:
         f"Texte : {texte}"
     )
     response = client_gemini.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt
     )
     contenu = response.text.strip()
@@ -136,7 +136,7 @@ async def traduire_fr(texte: str) -> str:
     if not texte:
         return ""
     response = client_gemini.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=f"Traduis ce texte en français. Réponds uniquement avec la traduction :\n\n{texte}"
     )
     return response.text.strip()
