@@ -209,9 +209,14 @@ function render(){
   if(!notes.length){c.innerHTML='<div class="empty"><div class="empty-icon">🔍</div>Aucune note trouvée.</div>';return}
   if(currentView==='table')renderTable(notes,c);else renderList(notes,c);
 }
+function noteIdx(n){
+  let idx=allNotes.indexOf(n);
+  if(idx===-1){idx=allNotes.findIndex(x=>x['Donnée']===n['Donnée']&&x['Source']===n['Source']);}
+  return idx;
+}
 function renderTable(notes,c){
   const rows=notes.map(n=>{
-    const idx=allNotes.indexOf(n);
+    const idx=noteIdx(n);
     const expl=(n['Explication']||'').substring(0,55)+((n['Explication']||'').length>55?'…':'');
     return`<tr onclick="openSheet(${idx})"><td>${badge(n['Thème'])}</td><td class="muted">${(n['Source']||'').substring(0,22)}</td><td class="muted">${n['Référence']||''}</td><td class="bold">${(n['Donnée']||'').substring(0,38)}</td><td class="muted">${expl}</td></tr>`;
   }).join('');
@@ -223,7 +228,7 @@ function renderList(notes,c){
   const html=Object.entries(groups).map(([theme,gnotes])=>{
     const[col,,]=tc(theme);
     const items=gnotes.map(n=>{
-      const idx=allNotes.indexOf(n);
+      const idx=noteIdx(n);
       return`<div class="nitem" onclick="openSheet(${idx})"><div class="nitem-top"><div class="nitem-title">${n['Donnée']||''}</div>${n['Référence']?`<div class="nitem-ref">${n['Référence']}</div>`:''}</div><div class="nitem-sub">${n['Source']||''}</div></div>`;
     }).join('');
     return`<div class="group"><div class="group-hdr" onclick="toggleGroup(this)"><div class="group-hdr-l"><div class="group-ico" style="background:${col}18">${te(theme)}</div><span class="group-name">${theme}</span></div><div style="display:flex;align-items:center;gap:7px"><span class="group-cnt">${gnotes.length}</span><svg class="chevron open" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg></div></div><div class="group-notes">${items}</div></div>`;
@@ -235,7 +240,8 @@ function toggleGroup(hdr){
   gn.classList.toggle('closed',open);ch.classList.toggle('open',!open);
 }
 function openSheet(idx){
-  const n=allNotes[idx];if(!n)return;
+  const n=allNotes[idx];
+  if(!n){loadNotes().then(()=>render());return;}
   const isAr=/[\u0600-\u06FF]/.test(n['Donnée']||'');
   const lien=n['Lien']?`<a href="${n['Lien']}" target="_blank" class="slink"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>${n['Lien']}</a>`:'';
   const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${n['Traduction FR']}</div>`:'';
