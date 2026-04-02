@@ -133,7 +133,7 @@ td.bold{font-weight:500}
   </div>
   <div class="tabs" id="tabs"></div>
 </div>
-<div class="chips" id="chips"></div>
+<div class="chips" id="chips" style="display:none"></div>
 <div class="stats" id="stats"></div>
 <div class="content" id="content"><div class="loading"><div class="spinner"></div><div class="loading-txt">Chargement…</div></div></div>
 
@@ -180,15 +180,14 @@ async function loadNotes(){
   try{
     const r=await fetch('/api/notes');const d=await r.json();
     if(!d.success)throw new Error(d.error);
-    allNotes=d.notes;buildTabs();buildChips();render();
+    allNotes=d.notes;buildTabs();buildChips();setTimeout(()=>render(),50);
   }catch(e){
     document.getElementById('content').innerHTML='<div class="loading"><div class="empty-icon">⚠️</div><div class="loading-txt">Impossible de charger les notes.</div><div class="error-btn" onclick="loadNotes()">Réessayer</div></div>';
   }
 }
 function themes(){return['Tous',...new Set(allNotes.map(n=>n['Thème']||'Autre'))]}
-function stypes(){return['Tous',...new Set(allNotes.map(n=>stype(n['Source'])).filter(Boolean))]}
 function buildTabs(){document.getElementById('tabs').innerHTML=themes().map(t=>`<div class="tab ${t===activeTheme?'on':''}" onclick="setTheme('${t.replace(/'/g,"\\'")}')">${t==='Tous'?'Tous':t.length>12?t.substring(0,11)+'…':t}</div>`).join('')}
-function buildChips(){document.getElementById('chips').innerHTML=stypes().map(s=>`<div class="chip ${s===activeSource?'on':''}" onclick="setSource('${s.replace(/'/g,"\\'")}')"><div class="chip-dot"></div>${s}</div>`).join('')}
+function buildChips(){}
 function filtered(){
   const q=document.getElementById('search').value.toLowerCase();
   return allNotes.filter(n=>{
