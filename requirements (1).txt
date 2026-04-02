@@ -1,6 +1,0 @@
-python-telegram-bot==21.6
-google-genai>=1.0.0
-gspread>=6.0.0
-google-auth>=2.20.0
-reportlab>=4.0.0
-flask>=3.0.0
