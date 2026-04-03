@@ -420,7 +420,7 @@ async def cmd_modifier(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resultats = [(i+2, n) for i, n in enumerate(get_all_notes()) if q in str(n).lower()]
     if not resultats:
         await update.message.reply_text(f"Aucun résultat pour « {q} ».")
-        return ConversationHandler.END
+        return
     row, note = resultats[0]
     context.user_data["row"] = row
     context.user_data["note"] = note
@@ -473,6 +473,11 @@ async def cmd_supprimer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("❌ Non", callback_data=f"cancel|{note_id}"),
         ]])
     )
+
+async def cmd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text("❌ Modification annulée.")
+    return ConversationHandler.END
 
 async def cmd_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notes = get_all_notes()
@@ -554,9 +559,10 @@ def main():
     conv = ConversationHandler(
         entry_points=[CommandHandler("modifier", cmd_modifier)],
         states={ATTENTE_CORRECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, recevoir_correction)]},
-        fallbacks=[],
+        fallbacks=[CommandHandler("cancel", cmd_cancel)],
     )
     app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("cancel", cmd_cancel))
     app.add_handler(CommandHandler("notes", cmd_notes))
     app.add_handler(CommandHandler("chercher", cmd_chercher))
     app.add_handler(CommandHandler("supprimer", cmd_supprimer))

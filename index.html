@@ -186,8 +186,8 @@ async function loadNotes(){
   }
 }
 function themes(){return['Tous',...new Set(allNotes.map(n=>n['Thème']||'Autre'))]}
-function buildTabs(){document.getElementById('tabs').innerHTML=themes().map(t=>`<div class="tab ${t===activeTheme?'on':''}" onclick="setTheme('${t.replace(/'/g,"\\'")}')">${t==='Tous'?'Tous':t.length>12?t.substring(0,11)+'…':t}</div>`).join('')}
-function buildChips(){}
+function buildTabs(){const el=document.getElementById('tabs');el.innerHTML=themes().map(t=>`<div class="tab ${t===activeTheme?'on':''}" data-theme="${t.replace(/"/g,'&quot;')}">${t==='Tous'?'Tous':t.length>12?t.substring(0,11)+'…':t}</div>`).join('');el.querySelectorAll('.tab').forEach(d=>d.addEventListener('click',()=>setTheme(d.dataset.theme)))}
+function buildChips(){const notes=activeTheme==='Tous'?allNotes:allNotes.filter(n=>(n['Thème']||'Autre')===activeTheme);const types=[...new Set(notes.map(n=>stype(n['Source'])).filter(s=>s&&s!=='Autre'))];const chips=document.getElementById('chips');if(types.length<2){chips.style.display='none';return;}const sources=['Tous',...types];chips.style.display='flex';chips.innerHTML=sources.map(s=>`<div class="chip ${s===activeSource?'on':''}" data-source="${s.replace(/"/g,'&quot;')}"><span class="chip-dot"></span>${s}</div>`).join('');chips.querySelectorAll('.chip').forEach(d=>d.addEventListener('click',()=>setSource(d.dataset.source)))}
 function filtered(){
   const q=document.getElementById('search').value.toLowerCase();
   return allNotes.filter(n=>{
@@ -238,9 +238,10 @@ function toggleGroup(hdr){
   const gn=hdr.nextElementSibling,ch=hdr.querySelector('.chevron'),open=ch.classList.contains('open');
   gn.classList.toggle('closed',open);ch.classList.toggle('open',!open);
 }
-function openSheet(idx){
+async function openSheet(idx){
+  if(!allNotes[idx]){await loadNotes();}
   const n=allNotes[idx];
-  if(!n){loadNotes().then(()=>render());return;}
+  if(!n)return;
   const isAr=/[\u0600-\u06FF]/.test(n['Donnée']||'');
   const lien=n['Lien']?`<a href="${n['Lien']}" target="_blank" class="slink"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>${n['Lien']}</a>`:'';
   const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${n['Traduction FR']}</div>`:'';
@@ -255,7 +256,7 @@ function setView(v){currentView=v;document.getElementById('btn-table').classList
 function setTheme(t){activeTheme=t;activeSource='Tous';buildTabs();buildChips();render()}
 function setSource(s){activeSource=s;buildChips();render()}
 function onSearch(v){document.getElementById('search-clear').style.display=v?'flex':'none';render()}
-function clearSearch(){document.getElementById('search').value='';document.getElementById('search-clear').style.display='none';render()}
+function clearSearch(){document.getElementById('search').value='';document.getElementById('search-clear').style.display='none';activeSource='Tous';buildChips();render()}
 function setNav(a){['notes','search','export'].forEach(n=>{document.getElementById('ni-'+n).classList.toggle('on',n===a)})}
 function focusSearch(){setNav('search');document.getElementById('search').focus()}
 function showNotes(){setNav('notes')}
