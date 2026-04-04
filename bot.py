@@ -137,6 +137,29 @@ def run_flask():
 
 # ── Outils texte ──────────────────────────────────────────────────────────────
 
+def cap(s: str) -> str:
+    """Capitalise la première lettre d'une chaîne."""
+    if not s:
+        return s
+    return s[0].upper() + s[1:]
+
+def normaliser_source(source: str, notes: list) -> str:
+    """Retourne la source existante la plus proche si similarité >= 0.65."""
+    if not source or not notes:
+        return source
+    sources_existantes = list({n.get("Source", "") for n in notes if n.get("Source")})
+    if not sources_existantes:
+        return source
+    meilleur_score = 0.0
+    meilleure_source = source
+    source_lower = source.lower()
+    for s in sources_existantes:
+        score = difflib.SequenceMatcher(None, source_lower, s.lower()).ratio()
+        if score > meilleur_score:
+            meilleur_score = score
+            meilleure_source = s
+    return meilleure_source if meilleur_score >= 0.65 else source
+
 def contient_arabe(texte: str) -> bool:
     return bool(re.search(r'[\u0600-\u06FF]', texte))
 
@@ -296,21 +319,16 @@ async def traiter_note(update: Update, texte_brut: str):
         traduction = await traduire_fr(" — ".join(parties))
 
     note = {
-        "theme": capitaliser(data.get("theme") or "Autre"),
-        "source": capitaliser(data.get("source") or ""),
-        "reference": capitaliser(str(data.get("reference")) if data.get("reference") else ""),
-        "donnee": capitaliser(data.get("donnee") or texte),
-        "explication": capitaliser(data.get("explication") or ""),
-        "traduction_fr": capitaliser(traduction),
+        "theme": cap(data.get("theme") or "Autre"),
+        "source": cap(data.get("source") or ""),
+        "reference": str(data.get("reference")) if data.get("reference") else "",
+        "donnee": cap(data.get("donnee") or texte),
+        "explication": cap(data.get("explication") or ""),
+        "traduction_fr": traduction,
         "lien": lien,
     }
-
-    # Fuzzy matching : remplace la source par une source existante similaire
-    source_originale = note["source"]
-    source_matchee = trouver_source_similaire(source_originale) if source_originale else None
-    if source_matchee and source_matchee.lower() != source_originale.lower():
-        note["source"] = source_matchee
-
+    if note["source"]:
+        note["source"] = normaliser_source(note["source"], get_all_notes())
     if not note["source"]:
         note_id = str(update.message.message_id)
         notes_en_attente[note_id] = note
@@ -518,21 +536,16 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
         traduction = await traduire_fr(" — ".join(parties))
 
     note = {
-        "theme": capitaliser(data.get("theme") or "Autre"),
-        "source": capitaliser(data.get("source") or ""),
-        "reference": capitaliser(str(data.get("reference")) if data.get("reference") else ""),
-        "donnee": capitaliser(data.get("donnee") or texte),
-        "explication": capitaliser(data.get("explication") or ""),
-        "traduction_fr": capitaliser(traduction),
+        "theme": cap(data.get("theme") or "Autre"),
+        "source": cap(data.get("source") or ""),
+        "reference": str(data.get("reference")) if data.get("reference") else "",
+        "donnee": cap(data.get("donnee") or texte),
+        "explication": cap(data.get("explication") or ""),
+        "traduction_fr": traduction,
         "lien": lien or ancien_lien,
     }
-
-    # Fuzzy matching sur la source
-    source_originale = note["source"]
-    source_matchee = trouver_source_similaire(source_originale) if source_originale else None
-    if source_matchee and source_matchee.lower() != source_originale.lower():
-        note["source"] = source_matchee
-
+    if note["source"]:
+        note["source"] = normaliser_source(note["source"], get_all_notes())
     update_row(row, note)
     extra = (
         f"\n\n💡 Source reconnue : _{source_matchee}_"
