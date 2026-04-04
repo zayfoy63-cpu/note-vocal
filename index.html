@@ -168,7 +168,7 @@ td.bold{font-weight:500}
 </div>
 
 <script>
-let allNotes=[],currentView='table',activeTheme='Tous',activeSource='Tous';
+let allNotes=[],currentView='table',activeTheme='Tous';
 const TC={'Philosophie':['#A78BFA','rgba(139,92,246,0.15)','rgba(139,92,246,0.25)'],'Religion':['#818CF8','rgba(99,102,241,0.15)','rgba(99,102,241,0.2)'],'Psychologie':['#F472B6','rgba(244,114,182,0.12)','rgba(244,114,182,0.2)'],'Économie':['#34D399','rgba(16,185,129,0.12)','rgba(16,185,129,0.18)'],'Finance':['#2DD4BF','rgba(45,212,191,0.12)','rgba(45,212,191,0.18)'],'Histoire':['#FB923C','rgba(251,146,60,0.12)','rgba(251,146,60,0.18)'],'Sciences':['#60A5FA','rgba(96,165,250,0.12)','rgba(96,165,250,0.18)'],'Développement personnel':['#C084FC','rgba(192,132,252,0.12)','rgba(192,132,252,0.2)'],'Politique':['#F87171','rgba(248,113,113,0.12)','rgba(248,113,113,0.18)']};
 const TE={'Philosophie':'🏛','Religion':'☪️','Psychologie':'🧠','Économie':'📈','Finance':'💰','Histoire':'📜','Sciences':'🔬','Développement personnel':'🚀','Politique':'🏛'};
 function tc(t){for(const[k,v]of Object.entries(TC))if(t&&t.includes(k))return v;return['#9CA3AF','rgba(156,163,175,0.1)','rgba(156,163,175,0.15)']}
@@ -180,21 +180,22 @@ async function loadNotes(){
   try{
     const r=await fetch('/api/notes');const d=await r.json();
     if(!d.success)throw new Error(d.error);
-    allNotes=d.notes;activeTheme='Tous';activeSource='Tous';buildTabs();buildChips();render();
+    allNotes=d.notes;
   }catch(e){
     document.getElementById('content').innerHTML='<div class="loading"><div class="empty-icon">⚠️</div><div class="loading-txt">Impossible de charger les notes.</div><div class="error-btn" onclick="loadNotes()">Réessayer</div></div>';
+    return;
   }
+  activeTheme='Tous';buildTabs();render();
 }
 function themes(){return['Tous',...new Set(allNotes.map(n=>n['Thème']||'Autre'))]}
 function buildTabs(){const ts=themes();window.__tabs=ts;document.getElementById('tabs').innerHTML=ts.map((t,i)=>`<div class="tab ${t===activeTheme?'on':''}" onclick="setTheme(window.__tabs[${i}])">${t==='Tous'?'Tous':t.length>12?t.substring(0,11)+'…':t}</div>`).join('')}
-function buildChips(){const notes=activeTheme==='Tous'?allNotes:allNotes.filter(n=>(n['Thème']||'Autre')===activeTheme);const types=[...new Set(notes.map(n=>stype(n['Source'])).filter(s=>s&&s!=='Autre'))];const chips=document.getElementById('chips');if(types.length<2){chips.style.display='none';return;}const sources=['Tous',...types];window.__chips=sources;chips.style.display='flex';chips.innerHTML=sources.map((s,i)=>`<div class="chip ${s===activeSource?'on':''}" onclick="setSource(window.__chips[${i}])"><span class="chip-dot"></span>${s}</div>`).join('')}
+function buildChips(){}
 function filtered(){
   const q=document.getElementById('search').value.toLowerCase();
   return allNotes.filter(n=>{
     const mt=activeTheme==='Tous'||(n['Thème']||'Autre')===activeTheme;
-    const ms=activeSource==='Tous'||stype(n['Source'])===activeSource;
     const mq=!q||Object.values(n).some(v=>String(v).toLowerCase().includes(q));
-    return mt&&ms&&mq;
+    return mt&&mq;
   });
 }
 function updateStats(notes){
@@ -253,10 +254,10 @@ async function openSheet(idx){
 function handleOverlayClick(e){if(e.target===document.getElementById('overlay'))document.getElementById('overlay').classList.remove('open')}
 function handleExportOverlayClick(e){if(e.target===document.getElementById('export-overlay'))closeExportSheet()}
 function setView(v){currentView=v;document.getElementById('btn-table').classList.toggle('on',v==='table');document.getElementById('btn-list').classList.toggle('on',v==='list');render()}
-function setTheme(t){activeTheme=t;activeSource='Tous';buildTabs();buildChips();render()}
+function setTheme(t){activeTheme=t;buildTabs();render()}
 function setSource(s){activeSource=s;buildChips();render()}
 function onSearch(v){document.getElementById('search-clear').style.display=v?'flex':'none';render()}
-function clearSearch(){document.getElementById('search').value='';document.getElementById('search-clear').style.display='none';activeSource='Tous';buildChips();render()}
+function clearSearch(){document.getElementById('search').value='';document.getElementById('search-clear').style.display='none';render()}
 function setNav(a){['notes','search','export'].forEach(n=>{document.getElementById('ni-'+n).classList.toggle('on',n===a)})}
 function focusSearch(){setNav('search');document.getElementById('search').focus()}
 function showNotes(){setNav('notes')}
