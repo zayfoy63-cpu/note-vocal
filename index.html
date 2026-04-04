@@ -51,11 +51,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 table{width:100%;border-collapse:separate;border-spacing:0 5px;min-width:500px}
 thead tr{background:transparent}
 th{padding:6px 12px;text-align:left;font-size:10px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
-tbody tr{background:rgba(100,60,200,0.07);border:.5px solid rgba(100,60,200,0.16);cursor:pointer;transition:background .15s}
-tbody tr:active{background:rgba(124,92,252,0.14)}
-td{padding:11px 12px;font-size:12px;color:var(--text);vertical-align:top;max-width:160px}
-td:first-child{border-radius:9px 0 0 9px}
-td:last-child{border-radius:0 9px 9px 0}
+tbody tr{cursor:pointer;transition:background .15s}
+tbody tr:active td{background:rgba(124,92,252,0.14)}
+td{padding:11px 12px;font-size:12px;color:var(--text);vertical-align:top;max-width:160px;background:rgba(100,60,200,0.07);border-top:.5px solid rgba(100,60,200,0.16);border-bottom:.5px solid rgba(100,60,200,0.16)}
+td:first-child{border-radius:9px 0 0 9px;border-left:.5px solid rgba(100,60,200,0.16)}
+td:last-child{border-radius:0 9px 9px 0;border-right:.5px solid rgba(100,60,200,0.16)}
 td.muted{color:var(--text2);font-size:11px}
 td.bold{font-weight:500}
 .groups{display:flex;flex-direction:column;gap:8px}
@@ -186,8 +186,8 @@ async function loadNotes(){
   }
 }
 function themes(){return['Tous',...new Set(allNotes.map(n=>n['Thème']||'Autre'))]}
-function buildTabs(){const el=document.getElementById('tabs');el.innerHTML=themes().map(t=>`<div class="tab ${t===activeTheme?'on':''}" data-theme="${t.replace(/"/g,'&quot;')}">${t==='Tous'?'Tous':t.length>12?t.substring(0,11)+'…':t}</div>`).join('');el.querySelectorAll('.tab').forEach(d=>d.addEventListener('click',()=>setTheme(d.dataset.theme)))}
-function buildChips(){const notes=activeTheme==='Tous'?allNotes:allNotes.filter(n=>(n['Thème']||'Autre')===activeTheme);const types=[...new Set(notes.map(n=>stype(n['Source'])).filter(s=>s&&s!=='Autre'))];const chips=document.getElementById('chips');if(types.length<2){chips.style.display='none';return;}const sources=['Tous',...types];chips.style.display='flex';chips.innerHTML=sources.map(s=>`<div class="chip ${s===activeSource?'on':''}" data-source="${s.replace(/"/g,'&quot;')}"><span class="chip-dot"></span>${s}</div>`).join('');chips.querySelectorAll('.chip').forEach(d=>d.addEventListener('click',()=>setSource(d.dataset.source)))}
+function buildTabs(){const ts=themes();window.__tabs=ts;document.getElementById('tabs').innerHTML=ts.map((t,i)=>`<div class="tab ${t===activeTheme?'on':''}" onclick="setTheme(window.__tabs[${i}])">${t==='Tous'?'Tous':t.length>12?t.substring(0,11)+'…':t}</div>`).join('')}
+function buildChips(){const notes=activeTheme==='Tous'?allNotes:allNotes.filter(n=>(n['Thème']||'Autre')===activeTheme);const types=[...new Set(notes.map(n=>stype(n['Source'])).filter(s=>s&&s!=='Autre'))];const chips=document.getElementById('chips');if(types.length<2){chips.style.display='none';return;}const sources=['Tous',...types];window.__chips=sources;chips.style.display='flex';chips.innerHTML=sources.map((s,i)=>`<div class="chip ${s===activeSource?'on':''}" onclick="setSource(window.__chips[${i}])"><span class="chip-dot"></span>${s}</div>`).join('')}
 function filtered(){
   const q=document.getElementById('search').value.toLowerCase();
   return allNotes.filter(n=>{
