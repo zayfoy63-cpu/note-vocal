@@ -180,7 +180,7 @@ async function loadNotes(){
   try{
     const r=await fetch('/api/notes');const d=await r.json();
     if(!d.success)throw new Error(d.error);
-    allNotes=d.notes;buildTabs();buildChips();setTimeout(()=>render(),50);
+    allNotes=d.notes;activeTheme='Tous';activeSource='Tous';buildTabs();buildChips();render();
   }catch(e){
     document.getElementById('content').innerHTML='<div class="loading"><div class="empty-icon">⚠️</div><div class="loading-txt">Impossible de charger les notes.</div><div class="error-btn" onclick="loadNotes()">Réessayer</div></div>';
   }
