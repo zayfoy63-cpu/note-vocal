@@ -57,27 +57,19 @@ td:first-child{border-radius:12px 0 0 12px;border-left:.5px solid rgba(255,255,2
 td:last-child{border-radius:0 12px 12px 0;border-right:.5px solid rgba(255,255,255,0.07)}
 td.muted{color:rgba(255,255,255,0.42);font-size:12px}
 td.bold{font-weight:600}
-/* ── List view ── */
-.groups{display:flex;flex-direction:column;gap:12px}
-.group{position:relative;background:rgba(255,255,255,0.035);border:.5px solid rgba(255,255,255,0.08);border-radius:var(--r);overflow:hidden}
-.group-hdr{display:flex;align-items:center;justify-content:space-between;padding:15px 16px 14px;cursor:pointer}
-.group-hdr-l{display:flex;align-items:center;gap:11px}
-.group-ico{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-.group-name{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.2px}
-.group-cnt{font-size:11px;color:rgba(255,255,255,0.35);background:rgba(255,255,255,0.07);padding:3px 9px;border-radius:20px;font-weight:500}
-.chevron{width:16px;height:16px;stroke:rgba(255,255,255,0.3);fill:none;stroke-width:2.5;transition:transform .2s;flex-shrink:0}
-.chevron.open{transform:rotate(180deg)}
-.group-notes{display:flex;flex-direction:column;gap:6px;padding:0 8px 10px}
-.group-notes.closed{display:none}
-.nitem{padding:13px 14px;border-radius:11px;background:rgba(255,255,255,0.05);border:.5px solid rgba(255,255,255,0.1);cursor:pointer;transition:background .15s}
-.nitem:active{background:rgba(255,255,255,0.09)}
-.nitem-title{font-size:14px;font-weight:600;color:#fff;line-height:1.4;margin-bottom:5px}
-.nitem-meta{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.nitem-src{font-size:12px;color:rgba(255,255,255,0.38);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nitem-ref{font-size:11px;color:var(--accent2);white-space:nowrap;background:rgba(139,111,255,0.13);padding:2px 8px;border-radius:10px;flex-shrink:0}
-.nitem-expl{font-size:12px;color:rgba(255,255,255,0.32);margin-top:5px;line-height:1.45}
-.group-glow{height:1px;background:linear-gradient(90deg,transparent,var(--gc,rgba(139,111,255,.7)),transparent);margin:0 15%;filter:blur(2px);margin-top:2px}
-/* ── Badge ── */
+/* ── List view – cartes plates ── */
+.ncards{display:flex;flex-direction:column;gap:10px}
+.ncard{background:rgba(255,255,255,0.04);border:.5px solid rgba(255,255,255,0.09);border-radius:14px;padding:16px;cursor:pointer;transition:background .15s}
+.ncard:active{background:rgba(255,255,255,0.07)}
+.ncard-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:9px}
+.ncard-title{font-size:15px;font-weight:700;color:#fff;line-height:1.35;flex:1}
+.ncard-badges{display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;padding-top:2px}
+.nbadge-cat{font-size:11px;font-weight:600;color:#4ade80;border:1px solid rgba(74,222,128,0.45);border-radius:20px;padding:3px 10px;white-space:nowrap}
+.nbadge-src{font-size:11px;font-weight:500;color:#a78bfa;border:1px solid rgba(167,139,250,0.45);border-radius:20px;padding:3px 10px;white-space:nowrap}
+.ncard-expl{font-size:13px;color:rgba(255,255,255,0.48);line-height:1.5;margin-bottom:10px}
+.ncard-meta{display:flex;gap:6px;flex-wrap:wrap}
+.nmeta-tag{font-size:11px;color:rgba(255,255,255,0.38);background:rgba(255,255,255,0.06);border:.5px solid rgba(255,255,255,0.1);border-radius:6px;padding:3px 9px}
+/* ── Badge (table view) ── */
 .badge{display:inline-flex;align-items:center;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;letter-spacing:.3px;margin-bottom:6px}
 /* ── Overlay / Sheet ── */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,0);z-index:100;pointer-events:none;transition:background .3s;display:flex;align-items:flex-end}
@@ -227,20 +219,19 @@ function renderTable(notes,c){
   c.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Thème</th><th>Source</th><th>Réf.</th><th>Donnée</th><th>Explication</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function renderList(notes,c){
-  const groups={};
-  notes.forEach(n=>{const t=n['Thème']||'Autre';if(!groups[t])groups[t]=[];groups[t].push(n)});
-  const html=Object.entries(groups).map(([theme,gnotes])=>{
-    const[col]=tc(theme);
-    const items=gnotes.map(n=>{
-      const idx=noteIdx(n);
-      const expl=(n['Explication']||'').substring(0,70);
-      const explHtml=expl?`<div class="nitem-expl">${expl}${(n['Explication']||'').length>70?'…':''}</div>`:'';
-      const refHtml=n['Référence']?`<span class="nitem-ref">${n['Référence']}</span>`:'';
-      return`<div class="nitem" onclick="openSheet(${idx})"><div class="nitem-title">${n['Donnée']||''}</div><div class="nitem-meta"><span class="nitem-src">${(n['Source']||'').substring(0,40)}</span>${refHtml}</div>${explHtml}</div>`;
-    }).join('');
-    return`<div class="group" style="--gc:${col}"><div class="group-hdr" onclick="toggleGroup(this)"><div class="group-hdr-l"><div class="group-ico" style="background:linear-gradient(135deg,${col}50,${col}20)">${te(theme)}</div><span class="group-name">${theme}</span></div><div style="display:flex;align-items:center;gap:8px"><span class="group-cnt">${gnotes.length}</span><svg class="chevron open" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg></div></div><div class="group-notes">${items}</div><div class="group-glow"></div></div>`;
+  const html=notes.map(n=>{
+    const idx=noteIdx(n);
+    const theme=n['Thème']||'Autre';
+    const src=n['Source']||'';
+    const srcShort=(src.includes(':')?src.split(':').slice(1).join(':').trim():src).substring(0,22);
+    const expl=(n['Explication']||'').substring(0,130);
+    const explHtml=expl?`<div class="ncard-expl">${expl}${(n['Explication']||'').length>130?'…':''}</div>`:'';
+    const ref=n['Référence']||'';
+    const metaHtml=ref?`<div class="ncard-meta"><span class="nmeta-tag">${ref}</span></div>`:'';
+    const srcBadge=srcShort?`<span class="nbadge-src">${srcShort}</span>`:'';
+    return`<div class="ncard" onclick="openSheet(${idx})"><div class="ncard-top"><div class="ncard-title">${n['Donnée']||''}</div><div class="ncard-badges"><span class="nbadge-cat">${theme}</span>${srcBadge}</div></div>${explHtml}${metaHtml}</div>`;
   }).join('');
-  c.innerHTML=`<div class="groups">${html}</div>`;
+  c.innerHTML=`<div class="ncards">${html}</div>`;
 }
 function toggleGroup(hdr){
   const gn=hdr.nextElementSibling,ch=hdr.querySelector('.chevron'),open=ch.classList.contains('open');
