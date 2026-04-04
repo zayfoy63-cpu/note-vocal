@@ -171,9 +171,10 @@ td.bold{font-weight:500}
 let allNotes=[],currentView='table',activeTheme='Tous',activeSource='Tous';
 const TC={'Philosophie':['#A78BFA','rgba(139,92,246,0.15)','rgba(139,92,246,0.25)'],'Religion':['#818CF8','rgba(99,102,241,0.15)','rgba(99,102,241,0.2)'],'Psychologie':['#F472B6','rgba(244,114,182,0.12)','rgba(244,114,182,0.2)'],'Économie':['#34D399','rgba(16,185,129,0.12)','rgba(16,185,129,0.18)'],'Finance':['#2DD4BF','rgba(45,212,191,0.12)','rgba(45,212,191,0.18)'],'Histoire':['#FB923C','rgba(251,146,60,0.12)','rgba(251,146,60,0.18)'],'Sciences':['#60A5FA','rgba(96,165,250,0.12)','rgba(96,165,250,0.18)'],'Développement personnel':['#C084FC','rgba(192,132,252,0.12)','rgba(192,132,252,0.2)'],'Politique':['#F87171','rgba(248,113,113,0.12)','rgba(248,113,113,0.18)']};
 const TE={'Philosophie':'🏛','Religion':'☪️','Psychologie':'🧠','Économie':'📈','Finance':'💰','Histoire':'📜','Sciences':'🔬','Développement personnel':'🚀','Politique':'🏛'};
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function tc(t){for(const[k,v]of Object.entries(TC))if(t&&t.includes(k))return v;return['#9CA3AF','rgba(156,163,175,0.1)','rgba(156,163,175,0.15)']}
 function te(t){for(const[k,v]of Object.entries(TE))if(t&&t.includes(k))return v;return'📝'}
-function badge(t){const[c,bg,bd]=tc(t);return`<span class="badge" style="color:${c};background:${bg};border:.5px solid ${bd}">${t||'Autre'}</span>`}
+function badge(t){const[c,bg,bd]=tc(t);return`<span class="badge" style="color:${c};background:${bg};border:.5px solid ${bd}">${esc(t)||'Autre'}</span>`}
 function stype(s){if(!s)return'Autre';return s.split(':')[0].trim()||'Autre'}
 async function loadNotes(){
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div><div class="loading-txt">Chargement des notes…</div></div>';
@@ -187,7 +188,13 @@ async function loadNotes(){
 }
 function themes(){return['Tous',...new Set(allNotes.map(n=>n['Thème']||'Autre'))]}
 function buildTabs(){document.getElementById('tabs').innerHTML=themes().map(t=>`<div class="tab ${t===activeTheme?'on':''}" onclick="setTheme('${t.replace(/'/g,"\\'")}')">${t==='Tous'?'Tous':t.length>12?t.substring(0,11)+'…':t}</div>`).join('')}
-function buildChips(){}
+function buildChips(){
+  const sources=['Tous',...new Set(allNotes.filter(n=>activeTheme==='Tous'||(n['Thème']||'Autre')===activeTheme).map(n=>stype(n['Source'])).filter(s=>s&&s!=='Autre'))];
+  const el=document.getElementById('chips');
+  if(sources.length<=1){el.style.display='none';return;}
+  el.style.display='flex';
+  el.innerHTML=sources.map(s=>`<div class="chip ${s===activeSource?'on':''}" onclick="setSource('${esc(s).replace(/'/g,'&#39;')}')"><div class="chip-dot"></div>${esc(s)}</div>`).join('');
+}
 function filtered(){
   const q=document.getElementById('search').value.toLowerCase();
   return allNotes.filter(n=>{
@@ -216,8 +223,8 @@ function noteIdx(n){
 function renderTable(notes,c){
   const rows=notes.map(n=>{
     const idx=noteIdx(n);
-    const expl=(n['Explication']||'').substring(0,55)+((n['Explication']||'').length>55?'…':'');
-    return`<tr onclick="openSheet(${idx})"><td>${badge(n['Thème'])}</td><td class="muted">${(n['Source']||'').substring(0,22)}</td><td class="muted">${n['Référence']||''}</td><td class="bold">${(n['Donnée']||'').substring(0,38)}</td><td class="muted">${expl}</td></tr>`;
+    const explRaw=(n['Explication']||'').substring(0,55)+((n['Explication']||'').length>55?'…':'');
+    return`<tr onclick="openSheet(${idx})"><td>${badge(n['Thème'])}</td><td class="muted">${esc((n['Source']||'').substring(0,22))}</td><td class="muted">${esc(n['Référence']||'')}</td><td class="bold">${esc((n['Donnée']||'').substring(0,38))}</td><td class="muted">${esc(explRaw)}</td></tr>`;
   }).join('');
   c.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Thème</th><th>Source</th><th>Réf.</th><th>Donnée</th><th>Explication</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -228,7 +235,7 @@ function renderList(notes,c){
     const[col,,]=tc(theme);
     const items=gnotes.map(n=>{
       const idx=noteIdx(n);
-      return`<div class="nitem" onclick="openSheet(${idx})"><div class="nitem-top"><div class="nitem-title">${n['Donnée']||''}</div>${n['Référence']?`<div class="nitem-ref">${n['Référence']}</div>`:''}</div><div class="nitem-sub">${n['Source']||''}</div></div>`;
+      return`<div class="nitem" onclick="openSheet(${idx})"><div class="nitem-top"><div class="nitem-title">${esc(n['Donnée']||'')}</div>${n['Référence']?`<div class="nitem-ref">${esc(n['Référence'])}</div>`:''}</div><div class="nitem-sub">${esc(n['Source']||'')}</div></div>`;
     }).join('');
     return`<div class="group"><div class="group-hdr" onclick="toggleGroup(this)"><div class="group-hdr-l"><div class="group-ico" style="background:${col}18">${te(theme)}</div><span class="group-name">${theme}</span></div><div style="display:flex;align-items:center;gap:7px"><span class="group-cnt">${gnotes.length}</span><svg class="chevron open" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg></div></div><div class="group-notes">${items}</div></div>`;
   }).join('');
@@ -242,11 +249,12 @@ function openSheet(idx){
   const n=allNotes[idx];
   if(!n){loadNotes().then(()=>render());return;}
   const isAr=/[\u0600-\u06FF]/.test(n['Donnée']||'');
-  const lien=n['Lien']?`<a href="${n['Lien']}" target="_blank" class="slink"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>${n['Lien']}</a>`:'';
-  const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${n['Traduction FR']}</div>`:'';
-  const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${n['Explication']}</div>`:'';
-  const ref=n['Référence']?`<div class="slabel">Référence</div><div class="svalue">${n['Référence']}</div>`:'';
-  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'':''}">  ${n['Donnée']||''}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${n['Source']||'Sans source'}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}`;
+  const lienUrl=esc(n['Lien']||'');
+  const lien=n['Lien']?`<a href="${lienUrl}" target="_blank" rel="noopener noreferrer" class="slink"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>${lienUrl}</a>`:'';
+  const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${esc(n['Traduction FR'])}</div>`:'';
+  const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${esc(n['Explication'])}</div>`:'';
+  const ref=n['Référence']?`<div class="slabel">Référence</div><div class="svalue">${esc(n['Référence'])}</div>`:'';
+  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}`;
   document.getElementById('overlay').classList.add('open');
 }
 function handleOverlayClick(e){if(e.target===document.getElementById('overlay'))document.getElementById('overlay').classList.remove('open')}
@@ -261,7 +269,17 @@ function focusSearch(){setNav('search');document.getElementById('search').focus(
 function showNotes(){setNav('notes')}
 function openExportSheet(){setNav('export');document.getElementById('export-sub').textContent=`${filtered().length} note(s) seront exportées en PDF.`;document.getElementById('export-status').style.display='none';document.getElementById('export-overlay').classList.add('open')}
 function closeExportSheet(){document.getElementById('export-overlay').classList.remove('open');setNav('notes')}
-function doExport(){document.getElementById('export-status').textContent='Génération en cours…';document.getElementById('export-status').style.display='block';setTimeout(()=>{window.open('/export-pdf','_blank');closeExportSheet()},800)}
+function doExport(){
+  document.getElementById('export-status').textContent='Génération en cours…';
+  document.getElementById('export-status').style.display='block';
+  const params=new URLSearchParams();
+  if(activeTheme!=='Tous')params.set('theme',activeTheme);
+  if(activeSource!=='Tous')params.set('source',activeSource);
+  const q=document.getElementById('search').value;
+  if(q)params.set('q',q);
+  const url='/export-pdf'+(params.toString()?'?'+params.toString():'');
+  setTimeout(()=>{window.open(url,'_blank');closeExportSheet()},800);
+}
 const cv=document.getElementById('canvas'),ctx=cv.getContext('2d');let nodes=[];
 function initCanvas(){cv.width=window.innerWidth;cv.height=window.innerHeight;nodes=Array.from({length:28},()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,r:Math.random()*1.4+.5,p:Math.random()*Math.PI*2}))}
 function drawNet(){ctx.clearRect(0,0,cv.width,cv.height);nodes.forEach(n=>{n.x+=n.vx;n.y+=n.vy;n.p+=.01;if(n.x<0||n.x>cv.width)n.vx*=-1;if(n.y<0||n.y>cv.height)n.vy*=-1});nodes.forEach((a,i)=>nodes.slice(i+1).forEach(b=>{const d=Math.hypot(a.x-b.x,a.y-b.y);if(d<100){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=`rgba(100,60,200,${(1-d/100)*.08})`;ctx.lineWidth=.6;ctx.stroke()}}));nodes.forEach(n=>{ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,Math.PI*2);ctx.fillStyle=`rgba(140,100,255,${.1+Math.sin(n.p)*.05})`;ctx.fill()});requestAnimationFrame(drawNet)}

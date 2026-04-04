@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Fond d'écran - Pêcheur au repos</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #0a0015; width: 100vw; height: 100vh; }
+    canvas#bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    canvas#scene { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <canvas id="scene"></canvas>
+
+  <script>
+    // ─── Particules ──────────────────────────────────────────────
+    const bgCanvas = document.getElementById('bg');
+    const bgCtx = bgCanvas.getContext('2d');
+
+    function resizeAll() {
+      bgCanvas.width = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+      sceneCanvas.width = window.innerWidth;
+      sceneCanvas.height = window.innerHeight;
+    }
+
+    const particles = [];
+    const PARTICLE_COUNT = 180;
+
+    function randomColor() {
+      const purples = [
+        'rgba(160,80,255,',
+        'rgba(200,120,255,',
+        'rgba(120,40,220,',
+        'rgba(230,180,255,',
+        'rgba(255,255,255,',
+        'rgba(180,100,255,',
+      ];
+      return purples[Math.floor(Math.random() * purples.length)];
+    }
+
+    function createParticle() {
+      return {
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        r: Math.random() * 2.5 + 0.4,
+        color: randomColor(),
+        alpha: Math.random() * 0.7 + 0.2,
+        speedX: (Math.random() - 0.5) * 0.35,
+        speedY: (Math.random() - 0.5) * 0.35,
+        twinkle: Math.random() * Math.PI * 2,
+        twinkleSpeed: Math.random() * 0.04 + 0.01,
+      };
+    }
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) particles.push(createParticle());
+
+    function drawParticles(t) {
+      // Dégradé de fond – ciel nocturne / coucher de soleil
+      const grad = bgCtx.createLinearGradient(0, 0, 0, bgCanvas.height * 0.72);
+      grad.addColorStop(0,   '#05000f');
+      grad.addColorStop(0.3, '#1a0040');
+      grad.addColorStop(0.6, '#3a0070');
+      grad.addColorStop(1,   '#7a30b0');
+      bgCtx.fillStyle = grad;
+      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height * 0.72);
+
+      // Halo de lune
+      const moonX = bgCanvas.width * 0.78;
+      const moonY = bgCanvas.height * 0.13;
+      const moonGlow = bgCtx.createRadialGradient(moonX, moonY, 0, moonX, moonY, 110);
+      moonGlow.addColorStop(0,   'rgba(220,180,255,0.35)');
+      moonGlow.addColorStop(0.4, 'rgba(160,80,255,0.15)');
+      moonGlow.addColorStop(1,   'rgba(0,0,0,0)');
+      bgCtx.fillStyle = moonGlow;
+      bgCtx.beginPath();
+      bgCtx.arc(moonX, moonY, 110, 0, Math.PI * 2);
+      bgCtx.fill();
+
+      // Lune
+      bgCtx.save();
+      bgCtx.shadowColor = 'rgba(220,180,255,0.9)';
+      bgCtx.shadowBlur  = 28;
+      bgCtx.fillStyle   = '#f0e0ff';
+      bgCtx.beginPath();
+      bgCtx.arc(moonX, moonY, 30, 0, Math.PI * 2);
+      bgCtx.fill();
+      // Cratères subtils
+      bgCtx.fillStyle = 'rgba(160,100,220,0.25)';
+      [[moonX-8, moonY-5, 5],[moonX+9, moonY+6, 4],[moonX-3, moonY+10, 3]].forEach(([cx,cy,cr]) => {
+        bgCtx.beginPath(); bgCtx.arc(cx,cy,cr,0,Math.PI*2); bgCtx.fill();
+      });
+      bgCtx.restore();
+
+      // Particules / étoiles
+      particles.forEach(p => {
+        p.twinkle += p.twinkleSpeed;
+        const a = p.alpha * (0.6 + 0.4 * Math.sin(p.twinkle));
+        bgCtx.beginPath();
+        bgCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        bgCtx.fillStyle = p.color + a + ')';
+        bgCtx.fill();
+
+        // Connexions légères entre particules proches
+        particles.forEach(p2 => {
+          const dx = p.x - p2.x, dy = p.y - p2.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < 80 && dist > 0) {
+            bgCtx.beginPath();
+            bgCtx.moveTo(p.x, p.y);
+            bgCtx.lineTo(p2.x, p2.y);
+            bgCtx.strokeStyle = `rgba(180,100,255,${0.06 * (1 - dist/80)})`;
+            bgCtx.lineWidth = 0.5;
+            bgCtx.stroke();
+          }
+        });
+
+        p.x += p.speedX;
+        p.y += p.speedY;
+        if (p.x < 0) p.x = bgCanvas.width;
+        if (p.x > bgCanvas.width) p.x = 0;
+        if (p.y < 0 || p.y > bgCanvas.height * 0.72) { p.y = Math.random() * bgCanvas.height * 0.72; }
+      });
+    }
+
+    // ─── Scène ───────────────────────────────────────────────────
+    const sceneCanvas = document.getElementById('scene');
+    const ctx = sceneCanvas.getContext('2d');
+
+    resizeAll();
+    window.addEventListener('resize', () => { resizeAll(); });
+
+    let waveOffset = 0;
+
+    function drawScene(t) {
+      ctx.clearRect(0, 0, sceneCanvas.width, sceneCanvas.height);
+
+      const W = sceneCanvas.width;
+      const H = sceneCanvas.height;
+      const horizon = H * 0.68;
+
+      // ── Eau ──────────────────────────────────────────────────
+      const waterGrad = ctx.createLinearGradient(0, horizon, 0, H);
+      waterGrad.addColorStop(0,   '#3a0070');
+      waterGrad.addColorStop(0.3, '#25004d');
+      waterGrad.addColorStop(1,   '#0d001a');
+      ctx.fillStyle = waterGrad;
+      ctx.fillRect(0, horizon, W, H - horizon);
+
+      // Reflet de lune sur l'eau
+      const reflectGrad = ctx.createLinearGradient(0, horizon, 0, H);
+      reflectGrad.addColorStop(0, 'rgba(200,140,255,0.25)');
+      reflectGrad.addColorStop(1, 'rgba(200,140,255,0.02)');
+      ctx.fillStyle = reflectGrad;
+      ctx.beginPath();
+      ctx.moveTo(W * 0.72, horizon);
+      ctx.lineTo(W * 0.84, horizon);
+      ctx.lineTo(W * 0.92, H);
+      ctx.lineTo(W * 0.64, H);
+      ctx.closePath();
+      ctx.fill();
+
+      // Vagues animées
+      for (let wave = 0; wave < 5; wave++) {
+        ctx.beginPath();
+        ctx.moveTo(0, horizon + wave * 18);
+        for (let x = 0; x <= W; x += 6) {
+          const y = horizon + wave * 18
+            + Math.sin((x * 0.012) + waveOffset + wave * 0.9) * (4 - wave * 0.4)
+            + Math.sin((x * 0.025) + waveOffset * 1.3 + wave) * 2;
+          ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = `rgba(200,140,255,${0.18 - wave * 0.03})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // ── Rive / Berge ─────────────────────────────────────────
+      ctx.beginPath();
+      ctx.moveTo(0, horizon);
+      ctx.bezierCurveTo(W * 0.15, horizon + 10, W * 0.35, horizon - 8, W * 0.55, horizon + 4);
+      ctx.lineTo(W * 0.55, H);
+      ctx.lineTo(0, H);
+      ctx.closePath();
+      const bankGrad = ctx.createLinearGradient(0, horizon - 10, 0, H);
+      bankGrad.addColorStop(0, '#1a0a30');
+      bankGrad.addColorStop(0.4,'#0f0620');
+      bankGrad.addColorStop(1,  '#060010');
+      ctx.fillStyle = bankGrad;
+      ctx.fill();
+
+      // Herbe sur la berge
+      for (let i = 0; i < 28; i++) {
+        const gx = (i / 27) * W * 0.5;
+        const gy = horizon + Math.sin(i * 0.7) * 5;
+        const gh = 10 + Math.sin(i * 1.1 + t * 0.001) * 4;
+        ctx.beginPath();
+        ctx.moveTo(gx, gy);
+        ctx.quadraticCurveTo(gx + 3 + Math.sin(t*0.0015+i)*2, gy - gh * 0.6, gx + Math.sin(t*0.001+i)*3, gy - gh);
+        ctx.strokeStyle = `rgba(${80+i*3},${40+i*2},${120+i*3},0.7)`;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+
+      // ── Personnage ───────────────────────────────────────────
+      const px = W * 0.22;   // position horizontale
+      const py = horizon - 4; // sol de référence
+
+      drawFisherman(ctx, px, py, t, W, H);
+
+      // ── Ligne de pêche ───────────────────────────────────────
+      drawFishingLine(ctx, px, py, t, W, horizon);
+
+      // ── Reflets scintillants supplémentaires ─────────────────
+      for (let i = 0; i < 12; i++) {
+        const sx = W * 0.55 + (Math.sin(t * 0.0008 + i * 0.9) * 0.4 + 0.05) * W * 0.45;
+        const sy = horizon + 10 + i * (H - horizon - 20) / 12;
+        const sa = 0.15 + 0.12 * Math.sin(t * 0.002 + i);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.5 + Math.sin(t * 0.003 + i) * 1, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(220,180,255,${sa})`;
+        ctx.fill();
+      }
+    }
+
+    function drawFisherman(ctx, px, py, t, W, H) {
+      ctx.save();
+
+      // ── Transat ───────────────────────────────────────────
+      // Cadre
+      ctx.strokeStyle = '#8b5e3c';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+
+      // Pieds arrière
+      ctx.beginPath();
+      ctx.moveTo(px - 30, py - 2);
+      ctx.lineTo(px - 35, py + 14);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px - 15, py - 2);
+      ctx.lineTo(px - 18, py + 14);
+      ctx.stroke();
+
+      // Pieds avant
+      ctx.beginPath();
+      ctx.moveTo(px + 18, py - 2);
+      ctx.lineTo(px + 22, py + 14);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px + 28, py - 2);
+      ctx.lineTo(px + 33, py + 14);
+      ctx.stroke();
+
+      // Assise du transat
+      ctx.fillStyle = '#c8a060';
+      ctx.beginPath();
+      ctx.roundRect(px - 32, py - 22, 62, 10, 3);
+      ctx.fill();
+      ctx.strokeStyle = '#8b5e3c';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Rayures sur l'assise
+      ctx.strokeStyle = 'rgba(180,80,200,0.5)';
+      ctx.lineWidth = 1.5;
+      for (let s = 0; s < 5; s++) {
+        ctx.beginPath();
+        ctx.moveTo(px - 28 + s * 11, py - 22);
+        ctx.lineTo(px - 28 + s * 11, py - 12);
+        ctx.stroke();
+      }
+
+      // Dossier incliné
+      ctx.fillStyle = '#c8a060';
+      ctx.beginPath();
+      ctx.save();
+      ctx.translate(px - 30, py - 22);
+      ctx.rotate(-0.35);
+      ctx.roundRect(0, -42, 60, 10, 3);
+      ctx.fill();
+      ctx.strokeStyle = '#8b5e3c';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Rayures dossier
+      ctx.strokeStyle = 'rgba(180,80,200,0.5)';
+      ctx.lineWidth = 1.5;
+      for (let s = 0; s < 5; s++) {
+        ctx.beginPath();
+        ctx.moveTo(4 + s * 10, -42);
+        ctx.lineTo(4 + s * 10, -32);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // ── Corps / silhouette ────────────────────────────────
+      // Corps allongé (torse)
+      ctx.fillStyle = '#2a1a5e';
+      ctx.beginPath();
+      ctx.save();
+      ctx.translate(px - 14, py - 28);
+      ctx.rotate(-0.35);
+      ctx.roundRect(0, 0, 42, 16, 6);
+      ctx.fill();
+      ctx.restore();
+
+      // T-shirt rayures
+      ctx.save();
+      ctx.translate(px - 14, py - 28);
+      ctx.rotate(-0.35);
+      ctx.strokeStyle = 'rgba(160,80,255,0.5)';
+      ctx.lineWidth = 1.5;
+      for (let s = 0; s < 4; s++) {
+        ctx.beginPath();
+        ctx.moveTo(4 + s * 9, 0);
+        ctx.lineTo(4 + s * 9, 16);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Jambes allongées sur l'assise
+      ctx.fillStyle = '#3a2a7a';
+      ctx.save();
+      ctx.translate(px - 12, py - 14);
+      ctx.rotate(0.05);
+      ctx.roundRect(0, 0, 46, 11, 5);
+      ctx.fill();
+      ctx.restore();
+
+      // Pieds dépassant
+      ctx.fillStyle = '#f4c08a';
+      ctx.beginPath();
+      ctx.ellipse(px + 38, py - 8, 8, 5, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(px + 37, py - 3, 8, 5, 0.15, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bras tenant la canne
+      ctx.strokeStyle = '#f4c08a';
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(px - 6, py - 28);
+      ctx.quadraticCurveTo(px + 10, py - 35, px + 22, py - 28);
+      ctx.stroke();
+
+      // Main tenant la canne
+      ctx.fillStyle = '#f4c08a';
+      ctx.beginPath();
+      ctx.arc(px + 22, py - 28, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ── Tête ─────────────────────────────────────────────
+      const headX = px - 12;
+      const headY = py - 44;
+
+      // Cou
+      ctx.fillStyle = '#f4c08a';
+      ctx.beginPath();
+      ctx.roundRect(headX + 6, headY + 14, 8, 8, 3);
+      ctx.fill();
+
+      // Visage
+      ctx.fillStyle = '#f4c08a';
+      ctx.beginPath();
+      ctx.ellipse(headX + 10, headY + 6, 12, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Yeux fermés (qui se repose)
+      ctx.strokeStyle = '#5a3010';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(headX + 5, headY + 4, 3, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(headX + 15, headY + 4, 3, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+
+      // Sourire paisible
+      ctx.beginPath();
+      ctx.arc(headX + 10, headY + 8, 5, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+
+      // Petite moustache
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(headX + 7, headY + 6, 3, 0, Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(headX + 13, headY + 6, 3, 0, Math.PI);
+      ctx.stroke();
+
+      // ── Chapeau de paille ─────────────────────────────────
+      // Bord du chapeau (large)
+      const hatX = headX + 10;
+      const hatY = headY - 4;
+
+      ctx.fillStyle = '#c8a020';
+      ctx.beginPath();
+      ctx.ellipse(hatX, hatY, 20, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#8b6010';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Calotte du chapeau
+      ctx.fillStyle = '#d4aa30';
+      ctx.beginPath();
+      ctx.ellipse(hatX, hatY, 13, 3.5, 0, Math.PI, Math.PI * 2);
+      ctx.lineTo(hatX + 13, hatY);
+      ctx.lineTo(hatX + 10, hatY - 14);
+      ctx.quadraticCurveTo(hatX, hatY - 18, hatX - 10, hatY - 14);
+      ctx.lineTo(hatX - 13, hatY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#8b6010';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Texture paille (lignes)
+      ctx.strokeStyle = 'rgba(100,60,0,0.3)';
+      ctx.lineWidth = 0.8;
+      for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        ctx.moveTo(hatX - 9 + i * 3, hatY - 14 + i * 0.5);
+        ctx.lineTo(hatX - 9 + i * 3, hatY - 2);
+        ctx.stroke();
+      }
+
+      // Ruban du chapeau
+      ctx.fillStyle = 'rgba(160,50,200,0.7)';
+      ctx.beginPath();
+      ctx.ellipse(hatX, hatY - 2, 13, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawFishingLine(ctx, px, py, t, W, horizon) {
+      // Canne à pêche
+      const rodStartX = px + 20;
+      const rodStartY = py - 30;
+      const rodAngle  = -0.55;
+      const rodLength = 90;
+      const rodEndX = rodStartX + Math.cos(rodAngle) * rodLength;
+      const rodEndY = rodStartY + Math.sin(rodAngle) * rodLength;
+
+      // Corps de la canne
+      const rodGrad = ctx.createLinearGradient(rodStartX, rodStartY, rodEndX, rodEndY);
+      rodGrad.addColorStop(0, '#6b4010');
+      rodGrad.addColorStop(1, '#d4a040');
+      ctx.strokeStyle = rodGrad;
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(rodStartX, rodStartY);
+      ctx.lineTo(rodEndX, rodEndY);
+      ctx.stroke();
+
+      // Anneau de canne
+      ctx.strokeStyle = '#999';
+      ctx.lineWidth = 1.2;
+      const ringX = rodStartX + Math.cos(rodAngle) * (rodLength * 0.55);
+      const ringY = rodStartY + Math.sin(rodAngle) * (rodLength * 0.55);
+      ctx.beginPath();
+      ctx.arc(ringX, ringY, 3, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Fil de pêche – courbe vers l'eau
+      const lineStartX = rodEndX;
+      const lineStartY = rodEndY;
+      const bobX = W * 0.52 + Math.sin(t * 0.0008) * 8;
+      const bobY = horizon + 12 + Math.sin(t * 0.0015) * 3;
+
+      ctx.beginPath();
+      ctx.moveTo(lineStartX, lineStartY);
+      ctx.quadraticCurveTo(
+        lineStartX + (bobX - lineStartX) * 0.5,
+        lineStartY + 40,
+        bobX, bobY
+      );
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Flotteur
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,80,80,0.6)';
+      ctx.shadowBlur  = 8;
+      ctx.fillStyle   = '#ff4444';
+      ctx.beginPath();
+      ctx.ellipse(bobX, bobY, 4, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(bobX, bobY - 3, 4, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Petites rides autour du flotteur
+      for (let r = 1; r <= 3; r++) {
+        const rr = r * 7 + Math.sin(t * 0.002) * 2;
+        ctx.beginPath();
+        ctx.arc(bobX, bobY + 2, rr, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(180,100,255,${0.25 - r * 0.06})`;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
+    }
+
+    // ─── Boucle principale ───────────────────────────────────────
+    function loop(t) {
+      drawParticles(t);
+      drawScene(t);
+      waveOffset += 0.018;
+      requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

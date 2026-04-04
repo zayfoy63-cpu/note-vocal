@@ -4,8 +4,9 @@ import re
 import tempfile
 import threading
 import io
+import difflib
 
-from flask import Flask, jsonify, send_from_directory, make_response
+from flask import Flask, jsonify, send_from_directory, make_response, request
 from google import genai
 from google.genai import types
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -86,6 +87,15 @@ def api_notes():
 def export_pdf_web():
     try:
         notes = get_all_notes()
+        theme = request.args.get("theme", "").strip()
+        source = request.args.get("source", "").strip()
+        q = request.args.get("q", "").strip().lower()
+        if theme:
+            notes = [n for n in notes if (n.get("Thème") or "Autre") == theme]
+        if source:
+            notes = [n for n in notes if (n.get("Source") or "").split(":")[0].strip() == source]
+        if q:
+            notes = [n for n in notes if any(q in str(v).lower() for v in n.values())]
         buf = io.BytesIO()
         styles = getSampleStyleSheet()
         cell_style = ParagraphStyle("c", parent=styles["Normal"], fontSize=7, leading=10)
@@ -135,6 +145,58 @@ def extraire_lien(texte: str):
     lien = liens[0] if liens else ""
     propre = re.sub(r'https?://\S+', '', texte).strip()
     return propre, lien
+
+def capitaliser(s: str) -> str:
+    """Met la première lettre en majuscule, laisse le reste intact."""
+    if not s:
+        return s
+    return s[0].upper() + s[1:]
+
+def trouver_source_similaire(source_candidate: str, seuil: float = 0.65) -> str | None:
+    """Cherche une source existante similaire via fuzzy matching.
+
+    Combine ratio séquentiel (difflib) et chevauchement de mots-clés pour
+    gérer les variantes comme 'le livre capitalisme' → 'Livre : Le Capital de Karl Marx'.
+    Retourne la source existante si le score dépasse le seuil, sinon None.
+    """
+    if not source_candidate:
+        return None
+    notes = get_all_notes()
+    sources_existantes = list({
+        n.get("Source", "").strip()
+        for n in notes
+        if n.get("Source", "").strip()
+    })
+    if not sources_existantes:
+        return None
+
+    cand = source_candidate.lower().strip()
+    cand_type = cand.split(":")[0].strip() if ":" in cand else ""
+    cand_mots = set(re.findall(r'\w{4,}', cand))
+
+    meilleur_score = 0.0
+    meilleure_source = None
+
+    for src in sources_existantes:
+        src_norm = src.lower().strip()
+        score = difflib.SequenceMatcher(None, cand, src_norm).ratio()
+
+        src_type = src_norm.split(":")[0].strip() if ":" in src_norm else ""
+        src_mots = set(re.findall(r'\w{4,}', src_norm))
+
+        # Chevauchement : "capitalisme" contient "capital" → match partiel
+        overlap = any(cm in sm or sm in cm for cm in cand_mots for sm in src_mots)
+
+        if cand_type and src_type and cand_type == src_type and overlap:
+            score = max(score, 0.72)  # même type + mot-clé commun = signal fort
+        elif overlap:
+            score = max(score, 0.55)
+
+        if score > meilleur_score:
+            meilleur_score = score
+            meilleure_source = src
+
+    return meilleure_source if meilleur_score >= seuil else None
 
 # ── Gemini ────────────────────────────────────────────────────────────────────
 
@@ -232,15 +294,23 @@ async def traiter_note(update: Update, texte_brut: str):
         await msg.edit_text("🔄 Traduction en cours…")
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
         traduction = await traduire_fr(" — ".join(parties))
+
     note = {
-        "theme": data.get("theme") or "Autre",
-        "source": data.get("source") or "",
-        "reference": str(data.get("reference")) if data.get("reference") else "",
-        "donnee": data.get("donnee") or texte,
-        "explication": data.get("explication") or "",
-        "traduction_fr": traduction,
+        "theme": capitaliser(data.get("theme") or "Autre"),
+        "source": capitaliser(data.get("source") or ""),
+        "reference": capitaliser(str(data.get("reference")) if data.get("reference") else ""),
+        "donnee": capitaliser(data.get("donnee") or texte),
+        "explication": capitaliser(data.get("explication") or ""),
+        "traduction_fr": capitaliser(traduction),
         "lien": lien,
     }
+
+    # Fuzzy matching : remplace la source par une source existante similaire
+    source_originale = note["source"]
+    source_matchee = trouver_source_similaire(source_originale) if source_originale else None
+    if source_matchee and source_matchee.lower() != source_originale.lower():
+        note["source"] = source_matchee
+
     if not note["source"]:
         note_id = str(update.message.message_id)
         notes_en_attente[note_id] = note
@@ -253,8 +323,14 @@ async def traiter_note(update: Update, texte_brut: str):
             ]])
         )
         return
+
     save_to_sheet(note)
-    await msg.edit_text(f"✅ *Sauvegardée !*\n\n{formater(note)}", parse_mode="Markdown")
+    extra = (
+        f"\n\n💡 Source reconnue : _{source_matchee}_"
+        if source_matchee and source_matchee.lower() != source_originale.lower()
+        else ""
+    )
+    await msg.edit_text(f"✅ *Sauvegardée !*\n\n{formater(note)}{extra}", parse_mode="Markdown")
 
 async def traiter_commande(update, context, intention, texte):
     t = intention.get("type")
@@ -440,17 +516,30 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
     if data.get("est_arabe") or contient_arabe(texte):
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
         traduction = await traduire_fr(" — ".join(parties))
+
     note = {
-        "theme": data.get("theme") or "Autre",
-        "source": data.get("source") or "",
-        "reference": str(data.get("reference")) if data.get("reference") else "",
-        "donnee": data.get("donnee") or texte,
-        "explication": data.get("explication") or "",
-        "traduction_fr": traduction,
+        "theme": capitaliser(data.get("theme") or "Autre"),
+        "source": capitaliser(data.get("source") or ""),
+        "reference": capitaliser(str(data.get("reference")) if data.get("reference") else ""),
+        "donnee": capitaliser(data.get("donnee") or texte),
+        "explication": capitaliser(data.get("explication") or ""),
+        "traduction_fr": capitaliser(traduction),
         "lien": lien or ancien_lien,
     }
+
+    # Fuzzy matching sur la source
+    source_originale = note["source"]
+    source_matchee = trouver_source_similaire(source_originale) if source_originale else None
+    if source_matchee and source_matchee.lower() != source_originale.lower():
+        note["source"] = source_matchee
+
     update_row(row, note)
-    await msg.edit_text(f"✅ *Note modifiée !*\n\n{formater(note)}", parse_mode="Markdown")
+    extra = (
+        f"\n\n💡 Source reconnue : _{source_matchee}_"
+        if source_matchee and source_matchee.lower() != source_originale.lower()
+        else ""
+    )
+    await msg.edit_text(f"✅ *Note modifiée !*\n\n{formater(note)}{extra}", parse_mode="Markdown")
     return ConversationHandler.END
 
 async def cmd_supprimer(update: Update, context: ContextTypes.DEFAULT_TYPE):
