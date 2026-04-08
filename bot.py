@@ -132,6 +132,30 @@ def export_pdf_web():
     except Exception as e:
         return f"Erreur : {str(e)}", 500
 
+@flask_app.route("/api/update-lien", methods=["POST"])
+def api_update_lien():
+    try:
+        data = request.get_json(force=True)
+        idx = int(data.get("idx", -1))
+        lien = str(data.get("lien", "")).strip()
+        if not lien.startswith(("http://", "https://")):
+            return jsonify({"success": False, "error": "URL invalide"}), 400
+        notes = get_all_notes()
+        if idx < 0 or idx >= len(notes):
+            return jsonify({"success": False, "error": "Index invalide"}), 400
+        n = notes[idx]
+        row = idx + 2  # ligne 1 = en-tête
+        note_updated = {
+            "theme": n.get("Thème", ""), "source": n.get("Source", ""),
+            "reference": n.get("Référence", ""), "donnee": n.get("Donnée", ""),
+            "explication": n.get("Explication", ""), "traduction_fr": n.get("Traduction FR", ""),
+            "lien": lien,
+        }
+        update_row(row, note_updated)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     flask_app.run(host="0.0.0.0", port=port, debug=False)
@@ -342,7 +366,7 @@ def formater(note: dict) -> str:
 
 # ── Traitement ────────────────────────────────────────────────────────────────
 
-async def traiter_note(update: Update, texte_brut: str):
+async def traiter_note(update: Update, context, texte_brut: str):
     texte, lien = extraire_lien(texte_brut)
     msg = await update.message.reply_text("✨ Analyse en cours…")
     data = await structurer(texte)
@@ -363,6 +387,7 @@ async def traiter_note(update: Update, texte_brut: str):
         "traduction_fr": traduction,
         "lien": lien or (data.get("lien") or ""),
     }
+    source_originale = note["source"]
     if note["source"]:
         note["source"] = normaliser_source(note["source"], get_all_notes())
     if not note["source"]:
@@ -379,9 +404,11 @@ async def traiter_note(update: Update, texte_brut: str):
         return
 
     save_to_sheet(note)
+    if note["theme"] == "Référence":
+        context.user_data["last_ref_donnee"] = note["donnee"]
     extra = (
-        f"\n\n💡 Source reconnue : _{source_matchee}_"
-        if source_matchee and source_matchee.lower() != source_originale.lower()
+        f"\n\n💡 Source reconnue : _{note['source']}_"
+        if note["source"] and source_originale and note["source"].lower() != source_originale.lower()
         else ""
     )
     await msg.edit_text(f"✅ *Sauvegardée !*\n\n{formater(note)}{extra}", parse_mode="Markdown")
@@ -477,10 +504,43 @@ async def traiter_commande(update, context, intention, texte):
             ]])
         )
 
+async def ajouter_lien_reference(update, context, url: str):
+    """Cherche la dernière note Référence sans lien et y ajoute l'URL."""
+    pending_donnee = context.user_data.pop("last_ref_donnee", None)
+    notes = get_all_notes()
+    target_row = None
+    target_donnee = None
+    # Priorité : note dont on connaît le titre exact
+    if pending_donnee:
+        for i in range(len(notes) - 1, -1, -1):
+            if notes[i].get("Donnée") == pending_donnee:
+                target_row, target_donnee = i + 2, pending_donnee
+                break
+    # Fallback : dernière Référence sans lien
+    if target_row is None:
+        for i in range(len(notes) - 1, -1, -1):
+            n = notes[i]
+            if n.get("Thème") == "Référence" and not n.get("Lien"):
+                target_row, target_donnee = i + 2, n.get("Donnée", "")
+                break
+    if target_row is None:
+        await update.message.reply_text("Aucune référence sans lien trouvée.")
+        return
+    n = notes[target_row - 2]
+    update_row(target_row, {
+        "theme": n.get("Thème", ""), "source": n.get("Source", ""),
+        "reference": n.get("Référence", ""), "donnee": n.get("Donnée", ""),
+        "explication": n.get("Explication", ""), "traduction_fr": n.get("Traduction FR", ""),
+        "lien": url,
+    })
+    await update.message.reply_text(
+        f"🔗 Lien ajouté à *{target_donnee}* !\n{url}", parse_mode="Markdown"
+    )
+
 async def handler_principal(update, context, texte):
     intention = await detecter_intention(texte)
     if intention.get("type") == "note":
-        await traiter_note(update, texte)
+        await traiter_note(update, context, texte)
     else:
         await traiter_commande(update, context, intention, texte)
 
@@ -525,7 +585,11 @@ async def cmd_vocal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await handler_principal(update, context, texte)
 
 async def cmd_texte(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await handler_principal(update, context, update.message.text)
+    texte = (update.message.text or "").strip()
+    if re.match(r'^https?://\S+$', texte) and context.user_data.get("last_ref_donnee"):
+        await ajouter_lien_reference(update, context, texte)
+        return
+    await handler_principal(update, context, texte)
 
 async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notes = get_all_notes()
@@ -588,12 +652,13 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
         "traduction_fr": traduction,
         "lien": lien or (data.get("lien") or "") or ancien_lien,
     }
+    source_originale = note["source"]
     if note["source"]:
         note["source"] = normaliser_source(note["source"], get_all_notes())
     update_row(row, note)
     extra = (
-        f"\n\n💡 Source reconnue : _{source_matchee}_"
-        if source_matchee and source_matchee.lower() != source_originale.lower()
+        f"\n\n💡 Source reconnue : _{note['source']}_"
+        if note["source"] and source_originale and note["source"].lower() != source_originale.lower()
         else ""
     )
     await msg.edit_text(f"✅ *Note modifiée !*\n\n{formater(note)}{extra}", parse_mode="Markdown")
@@ -670,6 +735,8 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         note = notes_en_attente.pop(note_id, None)
         if note:
             save_to_sheet(note)
+            if note.get("theme") == "Référence":
+                context.user_data["last_ref_donnee"] = note.get("donnee", "")
             await q.edit_message_text(f"✅ *Sauvegardée !*\n\n{formater(note)}", parse_mode="Markdown")
         else:
             await q.edit_message_text("❌ Note expirée, renvoie-la.")
@@ -677,7 +744,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         note_id = data[5:]
         info = notes_en_attente.pop(note_id, None)
         if info and "texte" in info:
-            await traiter_note(update, info["texte"])
+            await traiter_note(update, context, info["texte"])
     elif data.startswith("cmd|"):
         note_id = data[4:]
         info = notes_en_attente.pop(note_id, None)

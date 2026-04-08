@@ -108,6 +108,10 @@ td.bold{font-weight:600}
 .ni svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8}
 .ni-dot{width:3px;height:3px;border-radius:50%;background:var(--accent);display:none}
 .ni.on .ni-dot{display:block}
+.btn-add-lien{margin-top:10px;display:inline-flex;align-items:center;gap:5px;background:rgba(139,111,255,0.12);border:.5px solid rgba(139,111,255,0.3);border-radius:8px;padding:6px 12px;color:var(--accent2);font-size:12px;font-weight:500;cursor:pointer;transition:background .15s;-webkit-tap-highlight-color:transparent}
+.btn-add-lien:active{background:rgba(139,111,255,0.24)}
+#lien-input{width:100%;background:rgba(255,255,255,0.07);border:.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;color:#fff;font-size:14px;outline:none;margin-bottom:16px;-webkit-appearance:none;box-sizing:border-box}
+#lien-input:focus{border-color:rgba(139,111,255,0.5);background:rgba(255,255,255,0.09)}
 </style>
 </head>
 <body>
@@ -136,6 +140,18 @@ td.bold{font-weight:600}
 
 <div class="overlay" id="overlay" onclick="handleOverlayClick(event)">
   <div class="sheet"><div class="handle"></div><div class="sheet-body" id="sheet-body"></div></div>
+</div>
+<div class="overlay" id="lien-overlay" onclick="handleLienOverlayClick(event)">
+  <div class="sheet"><div class="handle"></div>
+    <div class="sheet-body" style="padding:0 18px 24px">
+      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px">Ajouter un lien</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.42);margin-bottom:16px" id="lien-ref-title"></div>
+      <input type="url" id="lien-input" placeholder="https://…" autocomplete="off">
+      <div id="lien-status" style="text-align:center;font-size:13px;color:var(--accent2);padding-bottom:10px;display:none"></div>
+      <button class="btn-confirm" onclick="saveLienFromEditor()">Sauvegarder</button>
+      <button class="btn-cancel" onclick="closeLienOverlay()">Annuler</button>
+    </div>
+  </div>
 </div>
 <div class="overlay" id="export-overlay" onclick="handleExportOverlayClick(event)">
   <div class="sheet"><div class="handle"></div>
@@ -227,11 +243,13 @@ function renderList(notes,c){
     const src=n['Source']||'';
     const srcShort=(src.includes(':')?src.split(':').slice(1).join(':').trim():src).substring(0,22);
     const expl=(n['Explication']||'').substring(0,130);
-    const explHtml=expl?`<div class="ncard-expl">${expl}${(n['Explication']||'').length>130?'…':''}</div>`:'';
+    const explHtml=expl?`<div class="ncard-expl">${esc(expl)}${(n['Explication']||'').length>130?'…':''}</div>`:'';
     const ref=n['Référence']||'';
-    const metaHtml=ref?`<div class="ncard-meta"><span class="nmeta-tag">${ref}</span></div>`:'';
-    const srcBadge=srcShort?`<span class="nbadge-src">${srcShort}</span>`:'';
-    return`<div class="ncard" onclick="openSheet(${idx})"><div class="ncard-top"><div class="ncard-title">${n['Donnée']||''}</div><div class="ncard-badges"><span class="nbadge-cat">${theme}</span>${srcBadge}</div></div>${explHtml}${metaHtml}</div>`;
+    const metaHtml=ref?`<div class="ncard-meta"><span class="nmeta-tag">${esc(ref)}</span></div>`:'';
+    const srcBadge=srcShort?`<span class="nbadge-src">${esc(srcShort)}</span>`:'';
+    const hasLien=!!(n['Lien']);
+    const lienBtn=theme==='Référence'?`<div><button class="btn-add-lien" onclick="event.stopPropagation();openLienEditor(${idx})">${hasLien?'✏️ Modifier le lien':'🔗 Ajouter un lien'}</button></div>`:'';
+    return`<div class="ncard" onclick="openSheet(${idx})"><div class="ncard-top"><div class="ncard-title">${esc(n['Donnée']||'')}</div><div class="ncard-badges"><span class="nbadge-cat">${esc(theme)}</span>${srcBadge}</div></div>${explHtml}${metaHtml}${lienBtn}</div>`;
   }).join('');
   c.innerHTML=`<div class="ncards">${html}</div>`;
 }
@@ -274,6 +292,21 @@ function doExport(){
   if(q)params.set('q',q);
   const url='/export-pdf'+(params.toString()?'?'+params.toString():'');
   setTimeout(()=>{window.open(url,'_blank');closeExportSheet()},800);
+}
+let currentLienIdx=-1;
+function openLienEditor(idx){currentLienIdx=idx;const n=allNotes[idx];document.getElementById('lien-ref-title').textContent=n['Donnée']||'';document.getElementById('lien-input').value=n['Lien']||'';document.getElementById('lien-status').style.display='none';document.getElementById('lien-overlay').classList.add('open')}
+function closeLienOverlay(){document.getElementById('lien-overlay').classList.remove('open');currentLienIdx=-1}
+function handleLienOverlayClick(e){if(e.target===document.getElementById('lien-overlay'))closeLienOverlay()}
+async function saveLienFromEditor(){
+  const lien=document.getElementById('lien-input').value.trim();
+  if(!lien)return;
+  const st=document.getElementById('lien-status');st.textContent='Sauvegarde…';st.style.display='block';
+  try{
+    const r=await fetch('/api/update-lien',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idx:currentLienIdx,lien})});
+    const d=await r.json();
+    if(d.success){allNotes[currentLienIdx]['Lien']=lien;st.textContent='✅ Lien sauvegardé !';setTimeout(()=>{closeLienOverlay();render()},900);}
+    else{st.textContent='❌ '+(d.error||'Erreur');}
+  }catch(e){st.textContent='❌ Erreur réseau';}
 }
 const cv=document.getElementById('canvas'),ctx=cv.getContext('2d');let nodes=[];
 function initCanvas(){cv.width=window.innerWidth;cv.height=window.innerHeight;nodes=Array.from({length:28},()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,r:Math.random()*1.4+.5,p:Math.random()*Math.PI*2}))}
