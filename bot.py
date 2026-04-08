@@ -4,6 +4,7 @@ import re
 import tempfile
 import threading
 import io
+import asyncio
 import difflib
 
 from flask import Flask, jsonify, send_from_directory, make_response, request
@@ -226,14 +227,18 @@ def trouver_source_similaire(source_candidate: str, seuil: float = 0.65) -> str 
 async def transcrire(file_path: str) -> str:
     with open(file_path, "rb") as f:
         audio_data = f.read()
-    response = client_gemini.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=[
-            types.Part.from_bytes(data=audio_data, mime_type="audio/ogg"),
-            "Transcris exactement ce message vocal en gardant la langue originale "
-            "(français, arabe, dialecte tunisien, anglais…). "
-            "Réponds uniquement avec la transcription, sans aucun texte autour."
-        ]
+    response = await asyncio.wait_for(
+        asyncio.to_thread(
+            client_gemini.models.generate_content,
+            model="gemini-2.5-flash",
+            contents=[
+                types.Part.from_bytes(data=audio_data, mime_type="audio/ogg"),
+                "Transcris exactement ce message vocal en gardant la langue originale "
+                "(français, arabe, dialecte tunisien, anglais…). "
+                "Réponds uniquement avec la transcription, sans aucun texte autour."
+            ]
+        ),
+        timeout=30,
     )
     return response.text.strip()
 
@@ -252,10 +257,16 @@ async def detecter_intention(texte: str) -> dict:
         "- 'doute': impossible de déterminer\n\n"
         f"Texte : {texte}"
     )
-    response = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    match = re.search(r"\{.*\}", response.text.strip(), re.DOTALL)
-    if match:
-        return json.loads(match.group())
+    try:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(client_gemini.models.generate_content, model="gemini-2.5-flash", contents=prompt),
+            timeout=30,
+        )
+        match = re.search(r"\{.*\}", response.text.strip(), re.DOTALL)
+        if match:
+            return json.loads(match.group())
+    except (asyncio.TimeoutError, Exception):
+        pass
     return {"type": "note", "mot_cle": None, "champ": None, "nouvelle_valeur": None}
 
 async def structurer(texte: str) -> dict:
@@ -275,21 +286,36 @@ async def structurer(texte: str) -> dict:
         "- Ne pas dupliquer donnee et explication.\n"
         f"Texte : {texte}"
     )
-    response = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    match = re.search(r"\{.*\}", response.text.strip(), re.DOTALL)
-    if match:
-        return json.loads(match.group())
+    try:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(client_gemini.models.generate_content, model="gemini-2.5-flash", contents=prompt),
+            timeout=30,
+        )
+        match = re.search(r"\{.*\}", response.text.strip(), re.DOTALL)
+        if match:
+            return json.loads(match.group())
+    except (asyncio.TimeoutError, Exception):
+        pass
     return {"theme": "Autre", "source": None, "reference": None,
             "donnee": texte, "explication": None, "est_arabe": False}
 
 async def traduire_fr(texte: str) -> str:
     if not texte:
         return ""
-    response = client_gemini.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=f"Traduis ce texte en français. Réponds uniquement avec la traduction :\n\n{texte}"
-    )
-    return response.text.strip()
+    try:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                client_gemini.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=f"Traduis ce texte en français. Réponds uniquement avec la traduction :\n\n{texte}"
+            ),
+            timeout=30,
+        )
+        return response.text.strip()
+    except asyncio.TimeoutError:
+        raise
+    except Exception:
+        return ""
 
 # ── Formatage Telegram ────────────────────────────────────────────────────────
 
@@ -316,8 +342,10 @@ async def traiter_note(update: Update, texte_brut: str):
     if data.get("est_arabe") or contient_arabe(texte):
         await msg.edit_text("🔄 Traduction en cours…")
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
-        traduction = await traduire_fr(" — ".join(parties))
-
+        try:
+            traduction = await traduire_fr(" — ".join(parties))
+        except asyncio.TimeoutError:
+            await msg.edit_text("⚠️ Traduction indisponible (timeout), note sauvegardée sans traduction…")
     note = {
         "theme": cap(data.get("theme") or "Autre"),
         "source": cap(data.get("source") or ""),
@@ -477,6 +505,12 @@ async def cmd_vocal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         path = tmp.name
     try:
         texte = await transcrire(path)
+    except asyncio.TimeoutError:
+        await msg.edit_text("⏱️ Transcription trop longue (> 30 s). Réessaie avec un message plus court.")
+        return
+    except Exception:
+        await msg.edit_text("❌ Erreur lors de la transcription. Réessaie.")
+        return
     finally:
         os.unlink(path)
     await msg.edit_text(f"🗣️ _{texte}_", parse_mode="Markdown")
@@ -533,8 +567,10 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
     traduction = ""
     if data.get("est_arabe") or contient_arabe(texte):
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
-        traduction = await traduire_fr(" — ".join(parties))
-
+        try:
+            traduction = await traduire_fr(" — ".join(parties))
+        except asyncio.TimeoutError:
+            await msg.edit_text("⚠️ Traduction indisponible (timeout), note sauvegardée sans traduction…")
     note = {
         "theme": cap(data.get("theme") or "Autre"),
         "source": cap(data.get("source") or ""),
