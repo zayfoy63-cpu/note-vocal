@@ -32,7 +32,7 @@ COLONNES = ["Thème", "Source", "Référence", "Donnée", "Explication", "Traduc
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 THEMES_PRINCIPAUX = [
     "Philosophie", "Religion", "Psychologie", "Économie", "Finance",
-    "Histoire", "Sciences", "Développement personnel", "Politique"
+    "Histoire", "Sciences", "Développement personnel", "Politique", "Référence"
 ]
 notes_en_attente = {}
 
@@ -279,11 +279,19 @@ async def structurer(texte: str) -> dict:
         '  "reference": "page, timestamp, sourate/verset, chapitre… null si absent",\n'
         '  "donnee": "concept principal dans la langue du texte",\n'
         '  "explication": "définition/contexte dans la langue du texte, null si absent",\n'
+        '  "lien": "URL mentionnée dans le texte, null si absent",\n'
         '  "est_arabe": true ou false\n'
         "}\n\n"
         "- Dicte libre → déduis intelligemment chaque info.\n"
         "- 'dans le livre X' → 'Livre : X'\n"
         "- Ne pas dupliquer donnee et explication.\n"
+        "- Si le texte mentionne un livre, une conférence, une formation, un cours, un film ou une ressource\n"
+        "  à enregistrer comme référence (ex: 'note ce livre', 'référence', 'enregistre cette conf') :\n"
+        "  → theme = 'Référence'\n"
+        "  → donnee = titre de la ressource\n"
+        "  → source = type + auteur/organisateur (ex: 'Livre de Karl Marx', 'Conférence de Simon Sinek', 'Formation de XYZ')\n"
+        "  → explication = bref résumé ou sujet si mentionné, sinon null\n"
+        "  → lien = URL si mentionnée, sinon null\n"
         f"Texte : {texte}"
     )
     try:
@@ -353,7 +361,7 @@ async def traiter_note(update: Update, texte_brut: str):
         "donnee": cap(data.get("donnee") or texte),
         "explication": cap(data.get("explication") or ""),
         "traduction_fr": traduction,
-        "lien": lien,
+        "lien": lien or (data.get("lien") or ""),
     }
     if note["source"]:
         note["source"] = normaliser_source(note["source"], get_all_notes())
@@ -578,7 +586,7 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
         "donnee": cap(data.get("donnee") or texte),
         "explication": cap(data.get("explication") or ""),
         "traduction_fr": traduction,
-        "lien": lien or ancien_lien,
+        "lien": lien or (data.get("lien") or "") or ancien_lien,
     }
     if note["source"]:
         note["source"] = normaliser_source(note["source"], get_all_notes())
