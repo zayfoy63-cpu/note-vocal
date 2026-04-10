@@ -156,6 +156,80 @@ def api_update_lien():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@flask_app.route("/api/vocal", methods=["POST"])
+def api_vocal():
+    try:
+        if 'audio' not in request.files:
+            return jsonify({"success": False, "error": "Pas d'audio reçu"}), 400
+        f = request.files['audio']
+        audio_data = f.read()
+        if not audio_data:
+            return jsonify({"success": False, "error": "Fichier audio vide"}), 400
+        # Normalise le mime type (supprime les paramètres codec)
+        mime_type = (f.content_type or 'audio/webm').split(';')[0].strip()
+        return jsonify(asyncio.run(_pipeline_vocal(audio_data, mime_type)))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+async def _pipeline_vocal(audio_data: bytes, mime_type: str) -> dict:
+    """Transcrit, structure, et sauvegarde une note audio enregistrée depuis le web."""
+    try:
+        resp = await asyncio.wait_for(
+            asyncio.to_thread(
+                client_gemini.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Part.from_bytes(data=audio_data, mime_type=mime_type),
+                    "Transcris exactement ce message vocal en gardant la langue originale "
+                    "(français, arabe, dialecte tunisien, anglais…). "
+                    "Réponds uniquement avec la transcription, sans aucun texte autour.",
+                ],
+            ),
+            timeout=30,
+        )
+        texte = resp.text.strip()
+    except asyncio.TimeoutError:
+        return {"success": False, "error": "⏱️ Transcription trop longue (> 30 s)"}
+    except Exception:
+        return {"success": False, "error": "❌ Erreur de transcription"}
+
+    data = await structurer(texte)
+
+    traduction = ""
+    if data.get("est_arabe") or contient_arabe(texte):
+        parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
+        try:
+            traduction = await traduire_fr(" — ".join(parties))
+        except (asyncio.TimeoutError, Exception):
+            pass  # sauvegarde sans traduction
+
+    note = {
+        "theme": cap(data.get("theme") or "Autre"),
+        "source": cap(data.get("source") or ""),
+        "reference": str(data.get("reference")) if data.get("reference") else "",
+        "donnee": cap(data.get("donnee") or texte),
+        "explication": cap(data.get("explication") or ""),
+        "traduction_fr": traduction,
+        "lien": data.get("lien") or "",
+    }
+
+    existing = get_all_notes()
+    if note["source"]:
+        note["source"] = normaliser_source(note["source"], existing)
+    save_to_sheet(note)
+
+    return {
+        "success": True,
+        "transcription": texte,
+        "note_idx": len(existing),   # index 0-based de la ligne créée
+        "note_raw": {
+            "Thème": note["theme"], "Source": note["source"],
+            "Référence": note["reference"], "Donnée": note["donnee"],
+            "Explication": note["explication"], "Traduction FR": note["traduction_fr"],
+            "Lien": note["lien"],
+        },
+    }
+
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     flask_app.run(host="0.0.0.0", port=port, debug=False)
