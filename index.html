@@ -112,6 +112,19 @@ td.bold{font-weight:600}
 .btn-add-lien:active{background:rgba(139,111,255,0.24)}
 #lien-input{width:100%;background:rgba(255,255,255,0.07);border:.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;color:#fff;font-size:14px;outline:none;margin-bottom:16px;-webkit-appearance:none;box-sizing:border-box}
 #lien-input:focus{border-color:rgba(139,111,255,0.5);background:rgba(255,255,255,0.09)}
+/* ── Mic FAB ── */
+.mic-fab{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));right:18px;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#8B6FFF,#6B4EFF);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;box-shadow:0 4px 20px rgba(107,78,255,0.55);-webkit-tap-highlight-color:transparent;touch-action:none;user-select:none;transition:transform .12s}
+.mic-fab.recording{background:linear-gradient(135deg,#ff5050,#cc1800);animation:mpulse 1s ease-in-out infinite}
+@keyframes mpulse{0%,100%{box-shadow:0 4px 20px rgba(255,60,60,.55)}50%{box-shadow:0 4px 32px rgba(255,60,60,.9),0 0 0 14px rgba(255,60,60,.08)}}
+.mic-fab svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;pointer-events:none}
+.mic-tip{position:fixed;bottom:calc(138px + env(safe-area-inset-bottom,0px));right:14px;background:rgba(22,18,48,.95);border:.5px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 13px;font-size:12px;color:#fff;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:25;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
+.mic-tip.on{opacity:1}
+/* ── Résultat vocal ── */
+.vocal-tx{font-size:13px;color:rgba(255,255,255,.42);line-height:1.5;font-style:italic;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:8px;margin-bottom:14px}
+.vocal-lien-row{display:flex;gap:8px;margin-top:8px}
+.vocal-lien-in{flex:1;background:rgba(255,255,255,.07);border:.5px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 13px;color:#fff;font-size:14px;outline:none;-webkit-appearance:none}
+.vocal-lien-in:focus{border-color:rgba(139,111,255,.5)}
+.vocal-lien-btn{padding:10px 14px;background:rgba(139,111,255,.2);border:.5px solid rgba(139,111,255,.4);border-radius:10px;color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -141,6 +154,10 @@ td.bold{font-weight:600}
 <div class="overlay" id="overlay" onclick="handleOverlayClick(event)">
   <div class="sheet"><div class="handle"></div><div class="sheet-body" id="sheet-body"></div></div>
 </div>
+<div class="mic-tip" id="mic-tip">🔴 Enregistrement — relâche pour envoyer</div>
+<button class="mic-fab" id="mic-fab" aria-label="Enregistrer une note vocale">
+  <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+</button>
 <div class="overlay" id="lien-overlay" onclick="handleLienOverlayClick(event)">
   <div class="sheet"><div class="handle"></div>
     <div class="sheet-body" style="padding:0 18px 24px">
@@ -270,7 +287,7 @@ async function openSheet(idx){
   document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}`;
   document.getElementById('overlay').classList.add('open');
 }
-function handleOverlayClick(e){if(e.target===document.getElementById('overlay'))document.getElementById('overlay').classList.remove('open')}
+function handleOverlayClick(e){if(e.target===document.getElementById('overlay')){document.getElementById('overlay').classList.remove('open');if(_vocalDone){_vocalDone=false;loadNotes();}}}
 function handleExportOverlayClick(e){if(e.target===document.getElementById('export-overlay'))closeExportSheet()}
 function setView(v){currentView=v;document.getElementById('btn-table').classList.toggle('on',v==='table');document.getElementById('btn-list').classList.toggle('on',v==='list');render()}
 function setTheme(t){activeTheme=t;buildTabs();render()}
@@ -293,6 +310,98 @@ function doExport(){
   const url='/export-pdf'+(params.toString()?'?'+params.toString():'');
   setTimeout(()=>{window.open(url,'_blank');closeExportSheet()},800);
 }
+// ── Enregistrement vocal ─────────────────────────────────────────────────────
+let _rec=null,_chunks=[],_recOn=false,_recStart=0,_vocalIdx=null,_vocalDone=false;
+function initMic(){
+  const b=document.getElementById('mic-fab');
+  const tip=document.getElementById('mic-tip');
+  b.addEventListener('touchstart',e=>{e.preventDefault();startRec();},{passive:false});
+  b.addEventListener('touchend',  e=>{e.preventDefault();stopRec(); },{passive:false});
+  b.addEventListener('touchcancel',e=>{e.preventDefault();stopRec();},{passive:false});
+  b.addEventListener('mousedown',e=>{e.preventDefault();startRec();});
+  document.addEventListener('mouseup',()=>{if(_recOn)stopRec();});
+}
+async function startRec(){
+  if(_recOn)return;
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    _chunks=[];
+    const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus'
+               :MediaRecorder.isTypeSupported('audio/webm')?'audio/webm':'';
+    _rec=new MediaRecorder(stream,mime?{mimeType:mime}:{});
+    _rec.ondataavailable=e=>{if(e.data&&e.data.size>0)_chunks.push(e.data);};
+    _rec.start(100);
+    _recOn=true;_recStart=Date.now();
+    document.getElementById('mic-fab').classList.add('recording');
+    document.getElementById('mic-tip').classList.add('on');
+  }catch(err){
+    const b=document.getElementById('sheet-body');
+    b.innerHTML=`<div class="empty"><div class="empty-icon">🎙️</div><div style="margin-top:8px">Microphone indisponible<br><small style="color:rgba(255,255,255,.3)">${esc(err.message)}</small></div></div>`;
+    document.getElementById('overlay').classList.add('open');
+  }
+}
+async function stopRec(){
+  if(!_recOn||!_rec)return;
+  _recOn=false;
+  document.getElementById('mic-fab').classList.remove('recording');
+  document.getElementById('mic-tip').classList.remove('on');
+  const dur=Date.now()-_recStart;
+  const mime=_rec.mimeType;
+  _rec.stop();_rec.stream.getTracks().forEach(t=>t.stop());
+  await new Promise(r=>_rec.onstop=r);
+  _rec=null;
+  if(dur<600||!_chunks.length)return; // trop court
+  sendVocal(new Blob(_chunks,{type:mime}));
+}
+async function sendVocal(blob){
+  _vocalIdx=null;_vocalDone=false;
+  const b=document.getElementById('sheet-body');
+  b.innerHTML='<div class="loading"><div class="spinner"></div><div class="loading-txt">Transcription et analyse…</div></div>';
+  document.getElementById('overlay').classList.add('open');
+  try{
+    const fd=new FormData();fd.append('audio',blob,'voice.webm');
+    const r=await fetch('/api/vocal',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.success){_vocalIdx=d.note_idx;_vocalDone=true;showVocalResult(d);}
+    else b.innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">${esc(d.error||'Erreur inconnue')}</div></div>`;
+  }catch(e){
+    b.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">Erreur réseau</div></div>';
+  }
+}
+function showVocalResult(d){
+  const n=d.note_raw;
+  const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${esc(n['Explication'])}</div>`:'';
+  const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${esc(n['Traduction FR'])}</div>`:'';
+  const lien=n['Lien']?`<a href="${esc(n['Lien'])}" target="_blank" rel="noopener" class="slink"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>${esc(n['Lien'])}</a>`:'';
+  document.getElementById('sheet-body').innerHTML=`
+<div class="vocal-tx">🗣️ ${esc(d.transcription)}</div>
+<div style="margin-bottom:8px">${badge(n['Thème'])}</div>
+<div class="sheet-title">${esc(n['Donnée']||'')}</div>
+<div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>
+<div class="sdivider"></div>${expl}${trad}${lien}
+<div class="sdivider"></div>
+<div class="slabel">Lien optionnel</div>
+<div class="vocal-lien-row">
+  <input type="url" class="vocal-lien-in" id="vocal-lien-in" placeholder="https://…" autocomplete="off">
+  <button class="vocal-lien-btn" onclick="saveVocalLien()">Ajouter</button>
+</div>
+<div id="vocal-lien-st" style="font-size:12px;color:var(--accent2);margin-top:8px;display:none"></div>`;
+}
+async function saveVocalLien(){
+  if(_vocalIdx===null)return;
+  const inp=document.getElementById('vocal-lien-in');
+  const lien=(inp?inp.value:'').trim();
+  if(!lien.startsWith('http'))return;
+  const st=document.getElementById('vocal-lien-st');
+  if(st){st.textContent='Sauvegarde…';st.style.display='block';}
+  try{
+    const r=await fetch('/api/update-lien',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idx:_vocalIdx,lien})});
+    const d=await r.json();
+    if(d.success){if(st)st.textContent='✅ Lien ajouté !';_vocalIdx=null;}
+    else if(st)st.textContent='❌ '+(d.error||'Erreur');
+  }catch(e){if(st)st.textContent='❌ Erreur réseau';}
+}
+initMic();
 let currentLienIdx=-1;
 function openLienEditor(idx){currentLienIdx=idx;const n=allNotes[idx];document.getElementById('lien-ref-title').textContent=n['Donnée']||'';document.getElementById('lien-input').value=n['Lien']||'';document.getElementById('lien-status').style.display='none';document.getElementById('lien-overlay').classList.add('open')}
 function closeLienOverlay(){document.getElementById('lien-overlay').classList.remove('open');currentLienIdx=-1}
