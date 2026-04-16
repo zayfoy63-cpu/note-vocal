@@ -4,3 +4,5 @@ gspread>=6.0.0
 google-auth>=2.20.0
 reportlab>=4.0.0
 flask>=3.0.0
+pyzbar>=0.1.10
+Pillow>=10.0.0
