@@ -10,8 +10,6 @@ import urllib.request
 import urllib.parse
 import urllib.error
 
-from PIL import Image
-from pyzbar.pyzbar import decode as zbar_decode
 
 from flask import Flask, jsonify, send_from_directory, make_response, request
 from google import genai
@@ -242,25 +240,34 @@ def run_flask():
 
 # ── Outils texte ──────────────────────────────────────────────────────────────
 
-def lire_isbn(image_bytes: bytes) -> str | None:
-    """Décode un code-barres ISBN depuis des bytes d'image. Retourne l'ISBN ou None."""
+async def lire_isbn_gemini(image_bytes: bytes) -> str | None:
+    """Utilise Gemini Vision pour lire l'ISBN depuis une photo de code-barres."""
+    prompt = (
+        "Regarde cette image. Si elle contient un code-barres de livre (ISBN), "
+        "lis le numéro et réponds UNIQUEMENT avec les chiffres bruts sans espace ni tiret "
+        "(exemple : 9782070368228). "
+        "Si aucun code-barres ISBN n'est visible, réponds UNIQUEMENT : NONE"
+    )
     try:
-        img = Image.open(io.BytesIO(image_bytes))
-        codes = zbar_decode(img)
-        if not codes:
-            codes = zbar_decode(img.convert("L"))  # retry en niveaux de gris
-    except Exception:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                client_gemini.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+                    prompt,
+                ],
+            ),
+            timeout=30,
+        )
+        isbn = re.sub(r"[\s\-]", "", response.text.strip())
+        if re.match(r"^97[89]\d{10}$", isbn):  # ISBN-13
+            return isbn
+        if re.match(r"^\d{9}[\dX]$", isbn):    # ISBN-10
+            return isbn
         return None
-    for code in codes:
-        try:
-            data = code.data.decode("utf-8").strip()
-        except Exception:
-            continue
-        if re.match(r"^97[89]\d{10}$", data):   # ISBN-13
-            return data
-        if re.match(r"^\d{9}[\dX]$", data):      # ISBN-10
-            return data
-    return None
+    except (asyncio.TimeoutError, Exception):
+        return None
 
 def google_books(isbn: str) -> dict | None:
     """Interroge l'API Google Books. Retourne dict(titre, auteur, description, lien) ou None."""
@@ -722,8 +729,8 @@ async def cmd_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     fich = await context.bot.get_file(photo.file_id)
     img_bytes = bytes(await fich.download_as_bytearray())
 
-    # Décodage ISBN dans un thread (pyzbar est synchrone)
-    isbn = await asyncio.to_thread(lire_isbn, img_bytes)
+    # Lecture de l'ISBN via Gemini Vision
+    isbn = await lire_isbn_gemini(img_bytes)
     if not isbn:
         await msg.edit_text("🔍 Aucun code-barres ISBN détecté.\nAssure-toi que le code-barres est net et bien cadré.")
         return
