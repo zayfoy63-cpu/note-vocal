@@ -6,6 +6,12 @@ import threading
 import io
 import asyncio
 import difflib
+import urllib.request
+import urllib.parse
+import urllib.error
+
+from PIL import Image
+from pyzbar.pyzbar import decode as zbar_decode
 
 from flask import Flask, jsonify, send_from_directory, make_response, request
 from google import genai
@@ -235,6 +241,50 @@ def run_flask():
     flask_app.run(host="0.0.0.0", port=port, debug=False)
 
 # ── Outils texte ──────────────────────────────────────────────────────────────
+
+def lire_isbn(image_bytes: bytes) -> str | None:
+    """Décode un code-barres ISBN depuis des bytes d'image. Retourne l'ISBN ou None."""
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        codes = zbar_decode(img)
+        if not codes:
+            codes = zbar_decode(img.convert("L"))  # retry en niveaux de gris
+    except Exception:
+        return None
+    for code in codes:
+        try:
+            data = code.data.decode("utf-8").strip()
+        except Exception:
+            continue
+        if re.match(r"^97[89]\d{10}$", data):   # ISBN-13
+            return data
+        if re.match(r"^\d{9}[\dX]$", data):      # ISBN-10
+            return data
+    return None
+
+def google_books(isbn: str) -> dict | None:
+    """Interroge l'API Google Books. Retourne dict(titre, auteur, description, lien) ou None."""
+    url = "https://www.googleapis.com/books/v1/volumes?" + urllib.parse.urlencode({"q": f"isbn:{isbn}"})
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, Exception):
+        return None
+    if not data.get("totalItems") or not data.get("items"):
+        return None
+    info = data["items"][0].get("volumeInfo", {})
+    auteurs = info.get("authors") or []
+    auteur = ", ".join(auteurs) if auteurs else ""
+    description = re.sub(r"<[^>]+>", "", info.get("description") or "")
+    if len(description) > 350:
+        description = description[:347] + "…"
+    lien = info.get("canonicalVolumeLink") or info.get("infoLink") or ""
+    return {
+        "titre": info.get("title") or "",
+        "auteur": auteur,
+        "description": description,
+        "lien": lien,
+    }
 
 def cap(s: str) -> str:
     """Capitalise la première lettre d'une chaîne."""
@@ -665,6 +715,48 @@ async def cmd_texte(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await handler_principal(update, context, texte)
 
+async def cmd_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await update.message.reply_text("📸 Analyse du code-barres…")
+    # Télécharge la photo la plus haute résolution disponible
+    photo = update.message.photo[-1]
+    fich = await context.bot.get_file(photo.file_id)
+    img_bytes = bytes(await fich.download_as_bytearray())
+
+    # Décodage ISBN dans un thread (pyzbar est synchrone)
+    isbn = await asyncio.to_thread(lire_isbn, img_bytes)
+    if not isbn:
+        await msg.edit_text("🔍 Aucun code-barres ISBN détecté.\nAssure-toi que le code-barres est net et bien cadré.")
+        return
+
+    await msg.edit_text(f"📖 ISBN `{isbn}` détecté — recherche en cours…", parse_mode="Markdown")
+
+    # Interroge Google Books dans un thread
+    livre = await asyncio.to_thread(google_books, isbn)
+    if not livre or not livre["titre"]:
+        await msg.edit_text(
+            f"❌ ISBN `{isbn}` introuvable sur Google Books.\n"
+            "Le livre a bien été détecté mais ses métadonnées ne sont pas disponibles.",
+            parse_mode="Markdown",
+        )
+        return
+
+    # Construction de la note
+    source = cap(f"Livre de {livre['auteur']}") if livre["auteur"] else "Livre"
+    note = {
+        "theme": "Référence",
+        "source": normaliser_source(source, get_all_notes()),
+        "reference": isbn,
+        "donnee": cap(livre["titre"]),
+        "explication": cap(livre["description"]) if livre["description"] else "",
+        "traduction_fr": "",
+        "lien": livre["lien"],
+    }
+    save_to_sheet(note)
+    # Mémorise pour ajout de lien URL éventuel
+    context.user_data["last_ref_donnee"] = note["donnee"]
+
+    await msg.edit_text(f"✅ *Livre enregistré !*\n\n{formater(note)}", parse_mode="Markdown")
+
 async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notes = get_all_notes()
     if not notes:
@@ -857,6 +949,7 @@ def main():
     app.add_handler(conv)
     app.add_handler(CallbackQueryHandler(callbacks))
     app.add_handler(MessageHandler(filters.VOICE, cmd_vocal))
+    app.add_handler(MessageHandler(filters.PHOTO, cmd_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_texte))
     print("✅ Bot + Interface web démarrés.")
     app.run_polling()
