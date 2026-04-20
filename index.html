@@ -110,6 +110,13 @@ td.bold{font-weight:600}
 .ni.on .ni-dot{display:block}
 .btn-add-lien{margin-top:10px;display:inline-flex;align-items:center;gap:5px;background:rgba(139,111,255,0.12);border:.5px solid rgba(139,111,255,0.3);border-radius:8px;padding:6px 12px;color:var(--accent2);font-size:12px;font-weight:500;cursor:pointer;transition:background .15s;-webkit-tap-highlight-color:transparent}
 .btn-add-lien:active{background:rgba(139,111,255,0.24)}
+.ncard-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:8px}
+.btn-del-card{background:none;border:none;color:rgba(255,255,255,0.2);font-size:16px;cursor:pointer;padding:4px 6px;border-radius:6px;line-height:1;-webkit-tap-highlight-color:transparent;transition:color .15s,background .15s;flex-shrink:0}
+.btn-del-card:active{color:#ff6060;background:rgba(255,60,60,0.12)}
+.btn-del-sheet{width:100%;padding:12px;background:rgba(255,60,60,0.08);border:.5px solid rgba(255,60,60,0.25);border-radius:12px;color:rgba(255,110,110,0.8);font-size:14px;cursor:pointer;margin-top:14px;font-weight:500}
+.btn-del-sheet:active{background:rgba(255,60,60,0.16)}
+.btn-del-confirm{width:100%;padding:14px;background:rgba(255,60,60,0.15);border:.5px solid rgba(255,60,60,0.4);border-radius:14px;color:#ff7070;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:10px}
+.btn-del-confirm:active{background:rgba(255,60,60,0.25)}
 #lien-input{width:100%;background:rgba(255,255,255,0.07);border:.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;color:#fff;font-size:14px;outline:none;margin-bottom:16px;-webkit-appearance:none;box-sizing:border-box}
 #lien-input:focus{border-color:rgba(139,111,255,0.5);background:rgba(255,255,255,0.09)}
 /* ── Mic FAB ── */
@@ -158,6 +165,16 @@ td.bold{font-weight:600}
 <button class="mic-fab" id="mic-fab" aria-label="Enregistrer une note vocale">
   <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
 </button>
+<div class="overlay" id="del-overlay" onclick="handleDelOverlayClick(event)">
+  <div class="sheet"><div class="handle"></div>
+    <div class="sheet-body" style="padding:0 18px 24px">
+      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px">Supprimer cette note ?</div>
+      <div id="del-note-title" style="font-size:14px;color:rgba(255,255,255,0.45);margin-bottom:20px;line-height:1.45"></div>
+      <button class="btn-del-confirm" onclick="doDelete()">🗑️ Supprimer définitivement</button>
+      <button class="btn-cancel" onclick="closeDelOverlay()">Annuler</button>
+    </div>
+  </div>
+</div>
 <div class="overlay" id="lien-overlay" onclick="handleLienOverlayClick(event)">
   <div class="sheet"><div class="handle"></div>
     <div class="sheet-body" style="padding:0 18px 24px">
@@ -265,8 +282,9 @@ function renderList(notes,c){
     const metaHtml=ref?`<div class="ncard-meta"><span class="nmeta-tag">${esc(ref)}</span></div>`:'';
     const srcBadge=srcShort?`<span class="nbadge-src">${esc(srcShort)}</span>`:'';
     const hasLien=!!(n['Lien']);
-    const lienBtn=theme==='Référence'?`<div><button class="btn-add-lien" onclick="event.stopPropagation();openLienEditor(${idx})">${hasLien?'✏️ Modifier le lien':'🔗 Ajouter un lien'}</button></div>`:'';
-    return`<div class="ncard" onclick="openSheet(${idx})"><div class="ncard-top"><div class="ncard-title">${esc(n['Donnée']||'')}</div><div class="ncard-badges"><span class="nbadge-cat">${esc(theme)}</span>${srcBadge}</div></div>${explHtml}${metaHtml}${lienBtn}</div>`;
+    const lienBtn=theme==='Référence'?`<button class="btn-add-lien" onclick="event.stopPropagation();openLienEditor(${idx})">${hasLien?'✏️ Modifier le lien':'🔗 Ajouter un lien'}</button>`:'';
+    const footer=`<div class="ncard-footer">${lienBtn}<button class="btn-del-card" onclick="event.stopPropagation();confirmDelete(${idx})" title="Supprimer">🗑️</button></div>`;
+    return`<div class="ncard" onclick="openSheet(${idx})"><div class="ncard-top"><div class="ncard-title">${esc(n['Donnée']||'')}</div><div class="ncard-badges"><span class="nbadge-cat">${esc(theme)}</span>${srcBadge}</div></div>${explHtml}${metaHtml}${footer}</div>`;
   }).join('');
   c.innerHTML=`<div class="ncards">${html}</div>`;
 }
@@ -284,7 +302,7 @@ async function openSheet(idx){
   const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${esc(n['Traduction FR'])}</div>`:'';
   const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${esc(n['Explication'])}</div>`:'';
   const ref=n['Référence']?`<div class="slabel">Référence</div><div class="svalue">${esc(n['Référence'])}</div>`:'';
-  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}`;
+  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}<button class="btn-del-sheet" onclick="document.getElementById('overlay').classList.remove('open');confirmDelete(${idx})">🗑️ Supprimer cette note</button>`;
   document.getElementById('overlay').classList.add('open');
 }
 function handleOverlayClick(e){if(e.target===document.getElementById('overlay')){document.getElementById('overlay').classList.remove('open');if(_vocalDone){_vocalDone=false;loadNotes();}}}
@@ -309,6 +327,34 @@ function doExport(){
   if(q)params.set('q',q);
   const url='/export-pdf'+(params.toString()?'?'+params.toString():'');
   setTimeout(()=>{window.open(url,'_blank');closeExportSheet()},800);
+}
+// ── Suppression de note ───────────────────────────────────────────────────────
+let _delIdx=null;
+function confirmDelete(idx){
+  _delIdx=idx;
+  const n=allNotes[idx];
+  document.getElementById('del-note-title').textContent=n?(n['Donnée']||''):'';
+  document.getElementById('del-overlay').classList.add('open');
+}
+function closeDelOverlay(){document.getElementById('del-overlay').classList.remove('open');_delIdx=null;}
+function handleDelOverlayClick(e){if(e.target===document.getElementById('del-overlay'))closeDelOverlay();}
+async function doDelete(){
+  if(_delIdx===null)return;
+  const idx=_delIdx;
+  closeDelOverlay();
+  // Retrait immédiat côté UI
+  allNotes.splice(idx,1);
+  buildTabs();render();
+  // Suppression côté serveur
+  try{
+    const r=await fetch('/api/delete-note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idx})});
+    const d=await r.json();
+    if(d.success){
+      // Re-sync silencieux pour corriger les indices futurs
+      const r2=await fetch('/api/notes');const d2=await r2.json();
+      if(d2.success){allNotes=d2.notes;buildTabs();render();}
+    }else{alert('Erreur : '+(d.error||'inconnue'));loadNotes();}
+  }catch(e){alert('Erreur réseau');loadNotes();}
 }
 // ── Enregistrement vocal ─────────────────────────────────────────────────────
 let _rec=null,_chunks=[],_recOn=false,_recStart=0,_vocalIdx=null,_vocalDone=false;

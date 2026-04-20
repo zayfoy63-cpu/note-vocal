@@ -160,6 +160,19 @@ def api_update_lien():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@flask_app.route("/api/delete-note", methods=["POST"])
+def api_delete_note():
+    try:
+        data = request.get_json(force=True)
+        idx = int(data.get("idx", -1))
+        notes = get_all_notes()
+        if idx < 0 or idx >= len(notes):
+            return jsonify({"success": False, "error": "Index invalide"}), 400
+        delete_row(idx + 2)  # ligne 1 = en-tête
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @flask_app.route("/api/vocal", methods=["POST"])
 def api_vocal():
     try:
