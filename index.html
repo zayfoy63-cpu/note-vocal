@@ -87,6 +87,7 @@ td.bold{font-weight:600}
 .slabel{font-size:10px;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;font-weight:600}
 .svalue{font-size:15px;color:rgba(255,255,255,0.78);line-height:1.65;margin-bottom:14px}
 .svalue.ar{font-size:17px;color:var(--accent2);text-align:right;direction:rtl}
+.sheet-title.ar{text-align:right;direction:rtl;font-size:22px}
 .svalue.fr{color:var(--green);font-size:14px}
 .slink{display:flex;align-items:center;gap:8px;background:rgba(139,111,255,0.1);border:.5px solid rgba(139,111,255,0.25);border-radius:10px;padding:10px 14px;color:var(--accent2);font-size:12px;text-decoration:none;word-break:break-all;margin-top:5px}
 .slink svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
@@ -416,13 +417,14 @@ async function sendVocal(blob){
 }
 function showVocalResult(d){
   const n=d.note_raw;
-  const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${esc(n['Explication'])}</div>`:'';
+  const isAr=/[؀-ۿ]/.test(n['Donnée']||'');
+  const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue${isAr?' ar':''}">${esc(n['Explication'])}</div>`:'';
   const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${esc(n['Traduction FR'])}</div>`:'';
   const lien=n['Lien']?`<a href="${esc(n['Lien'])}" target="_blank" rel="noopener" class="slink"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>${esc(n['Lien'])}</a>`:'';
   document.getElementById('sheet-body').innerHTML=`
 <div class="vocal-tx">🗣️ ${esc(d.transcription)}</div>
 <div style="margin-bottom:8px">${badge(n['Thème'])}</div>
-<div class="sheet-title">${esc(n['Donnée']||'')}</div>
+<div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div>
 <div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>
 <div class="sdivider"></div>${expl}${trad}${lien}
 <div class="sdivider"></div>

@@ -445,8 +445,8 @@ async def structurer(texte: str) -> dict:
         f'  "theme": "thème parmi : {themes_str}. Sinon crée un thème pertinent en français",\n'
         '  "source": "combine type ET nom : \'Livre : Atomic Habits\', \'Formation : XYZ\', \'Podcast : Huberman\', \'Film : Inception\', \'Documentaire : XYZ\', \'Verset : Sourate Al-Baqara\', \'Réflexion personnelle\'. null si absent.",\n'
         '  "reference": "page, timestamp, sourate/verset, chapitre… null si absent",\n'
-        '  "donnee": "concept principal dans la langue du texte",\n'
-        '  "explication": "définition/contexte dans la langue du texte, null si absent",\n'
+        '  "donnee": "concept principal dans la langue du texte — si le texte est en arabe, écris en alphabet arabe (ex: التوكل), PAS en translittération",\n'
+        '  "explication": "définition/contexte dans la langue du texte — si arabe, écris en arabe (الحروف العربية), null si absent",\n'
         '  "lien": "URL mentionnée dans le texte, null si absent",\n'
         '  "est_arabe": true ou false\n'
         "}\n\n"
