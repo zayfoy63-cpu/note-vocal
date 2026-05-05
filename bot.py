@@ -439,29 +439,31 @@ async def detecter_intention(texte: str) -> dict:
 
 async def structurer(texte: str) -> dict:
     themes_str = ", ".join(THEMES_PRINCIPAUX)
-    prompt = (
-        "Tu es un assistant de prise de notes. Retourne UNIQUEMENT un JSON valide :\n\n"
-        "{\n"
-        f'  "theme": "thème parmi : {themes_str}. Sinon crée un thème pertinent en français",\n'
-        '  "source": "combine type ET nom : \'Livre : Atomic Habits\', \'Formation : XYZ\', \'Podcast : Huberman\', \'Film : Inception\', \'Documentaire : XYZ\', \'Verset : Sourate Al-Baqara\', \'Réflexion personnelle\'. null si absent.",\n'
-        '  "reference": "page, timestamp, sourate/verset, chapitre… null si absent",\n'
-        '  "donnee": "concept principal dans la langue du texte",\n'
-        '  "explication": "définition/contexte dans la langue du texte, null si absent",\n'
-        '  "lien": "URL mentionnée dans le texte, null si absent",\n'
-        '  "est_arabe": true ou false\n'
-        "}\n\n"
-        "- Dicte libre → déduis intelligemment chaque info.\n"
-        "- 'dans le livre X' → 'Livre : X'\n"
-        "- Ne pas dupliquer donnee et explication.\n"
-        "- Si le texte mentionne un livre, une conférence, une formation, un cours, un film ou une ressource\n"
-        "  à enregistrer comme référence (ex: 'note ce livre', 'référence', 'enregistre cette conf') :\n"
-        "  → theme = 'Référence'\n"
-        "  → donnee = titre de la ressource\n"
-        "  → source = type + auteur/organisateur (ex: 'Livre de Karl Marx', 'Conférence de Simon Sinek', 'Formation de XYZ')\n"
-        "  → explication = bref résumé ou sujet si mentionné, sinon null\n"
-        "  → lien = URL si mentionnée, sinon null\n"
-        f"Texte : {texte}"
-    )
+    est_arabe = contient_arabe(texte)
+    regle_arabe = """
+REGLE CRITIQUE si texte en arabe :
+- donnee = le mot ou citation EN ARABE original (script arabe uniquement)
+- Ne JAMAIS traduire dans donnee
+- traduction_fr = traduction francaise complete et obligatoire
+""" if est_arabe else ""
+
+    prompt = f"""Tu es un assistant de prise de notes expert. Analyse ce texte et retourne UNIQUEMENT un JSON valide.
+{regle_arabe}
+{{"theme": "theme parmi : {themes_str}. Sinon cree un theme en francais",
+  "source": "combine type ET nom. Ex: Livre : Atomic Habits, Podcast : Huberman, Verset : Sourate Al-Baqara, Reflexion personnelle. null si absent.",
+  "reference": "page, timestamp, sourate/verset, chapitre. null si absent",
+  "donnee": "si arabe: le mot/citation exactement en script arabe. sinon: concept dans la langue du texte",
+  "explication": "contexte ou definition. null si absent",
+  "traduction_fr": "si arabe: traduction francaise complete obligatoire. sinon: null"
+}}
+
+Regles:
+- La personne dicte librement, deduis intelligemment
+- dans le livre X = source Livre : X
+- Ne pas dupliquer donnee et explication
+- Si aucune source = null
+
+Texte : {texte}"""
     try:
         response = await asyncio.wait_for(
             asyncio.to_thread(client_gemini.models.generate_content, model="gemini-2.5-flash", contents=prompt),
@@ -473,7 +475,7 @@ async def structurer(texte: str) -> dict:
     except (asyncio.TimeoutError, Exception):
         pass
     return {"theme": "Autre", "source": None, "reference": None,
-            "donnee": texte, "explication": None, "est_arabe": False}
+            "donnee": texte, "explication": None, "traduction_fr": None}
 
 async def traduire_fr(texte: str) -> str:
     if not texte:
