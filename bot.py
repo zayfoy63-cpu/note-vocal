@@ -199,7 +199,9 @@ async def _pipeline_vocal(audio_data: bytes, mime_type: str) -> dict:
                     types.Part.from_bytes(data=audio_data, mime_type=mime_type),
                     "Transcris exactement ce message vocal en gardant la langue originale "
                     "(français, arabe, dialecte tunisien, anglais…). "
-                    "Réponds uniquement avec la transcription, sans aucun texte autour.",
+                    "Réponds uniquement avec la transcription, sans aucun texte autour. "
+                    "Si le texte transcrit contient des mots arabes, ajoute les voyelles (tashkeel / harakat) "
+                    "sur les mots principaux pour faciliter la lecture et la prononciation.",
                 ],
             ),
             timeout=30,
@@ -403,7 +405,9 @@ async def transcrire(file_path: str) -> str:
                 types.Part.from_bytes(data=audio_data, mime_type="audio/ogg"),
                 "Transcris exactement ce message vocal en gardant la langue originale "
                 "(français, arabe, dialecte tunisien, anglais…). "
-                "Réponds uniquement avec la transcription, sans aucun texte autour."
+                "Réponds uniquement avec la transcription, sans aucun texte autour. "
+                "Si le texte transcrit contient des mots arabes, ajoute les voyelles (tashkeel / harakat) "
+                "sur les mots principaux pour faciliter la lecture et la prononciation."
             ]
         ),
         timeout=30,
@@ -445,7 +449,7 @@ async def structurer(texte: str) -> dict:
         f'  "theme": "thème parmi : {themes_str}. Sinon crée un thème pertinent en français",\n'
         '  "source": "combine type ET nom : \'Livre : Atomic Habits\', \'Formation : XYZ\', \'Podcast : Huberman\', \'Film : Inception\', \'Documentaire : XYZ\', \'Verset : Sourate Al-Baqara\', \'Réflexion personnelle\'. null si absent.",\n'
         '  "reference": "page, timestamp, sourate/verset, chapitre… null si absent",\n'
-        '  "donnee": "concept principal dans la langue du texte — si le texte est en arabe, écris en alphabet arabe (ex: التوكل), PAS en translittération",\n'
+        '  "donnee": "concept principal dans la langue du texte — si le texte est en arabe, écris en alphabet arabe (ex: التوكل), PAS en translittération. Ajoute les tashkeel (harakat) sur les mots arabes dans le champ donnee pour indiquer la prononciation correcte",\n'
         '  "explication": "définition/contexte dans la langue du texte — si arabe, écris en arabe (الحروف العربية), null si absent",\n'
         '  "lien": "URL mentionnée dans le texte, null si absent",\n'
         '  "est_arabe": true ou false\n'
