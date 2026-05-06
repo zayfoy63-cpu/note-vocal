@@ -212,13 +212,13 @@ async def _pipeline_vocal(audio_data: bytes, mime_type: str) -> dict:
 
     data = await structurer(texte)
 
-    traduction = ""
-    if data.get("est_arabe") or contient_arabe(texte):
+    traduction = data.get("traduction_fr") or ""
+    if not traduction and contient_arabe(texte):
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
         try:
             traduction = await traduire_fr(" — ".join(parties))
         except (asyncio.TimeoutError, Exception):
-            pass  # sauvegarde sans traduction
+            pass
 
     note = {
         "theme": cap(data.get("theme") or "Autre"),
@@ -227,7 +227,7 @@ async def _pipeline_vocal(audio_data: bytes, mime_type: str) -> dict:
         "donnee": cap(data.get("donnee") or texte),
         "explication": cap(data.get("explication") or ""),
         "traduction_fr": traduction,
-        "lien": data.get("lien") or "",
+        "lien": "",
     }
 
     existing = get_all_notes()
@@ -516,8 +516,8 @@ async def traiter_note(update: Update, context, texte_brut: str):
     texte, lien = extraire_lien(texte_brut)
     msg = await update.message.reply_text("✨ Analyse en cours…")
     data = await structurer(texte)
-    traduction = ""
-    if data.get("est_arabe") or contient_arabe(texte):
+    traduction = data.get("traduction_fr") or ""
+    if not traduction and contient_arabe(texte):
         await msg.edit_text("🔄 Traduction en cours…")
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
         try:
@@ -531,7 +531,7 @@ async def traiter_note(update: Update, context, texte_brut: str):
         "donnee": cap(data.get("donnee") or texte),
         "explication": cap(data.get("explication") or ""),
         "traduction_fr": traduction,
-        "lien": lien or (data.get("lien") or ""),
+        "lien": lien or "",
     }
     source_originale = note["source"]
     if note["source"]:
@@ -824,8 +824,8 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
     ancien_lien = context.user_data.get("note", {}).get("Lien", "")
     msg = await update.message.reply_text("✨ Restructuration en cours…")
     data = await structurer(texte)
-    traduction = ""
-    if data.get("est_arabe") or contient_arabe(texte):
+    traduction = data.get("traduction_fr") or ""
+    if not traduction and contient_arabe(texte):
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
         try:
             traduction = await traduire_fr(" — ".join(parties))
@@ -838,7 +838,7 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
         "donnee": cap(data.get("donnee") or texte),
         "explication": cap(data.get("explication") or ""),
         "traduction_fr": traduction,
-        "lien": lien or (data.get("lien") or "") or ancien_lien,
+        "lien": lien or ancien_lien,
     }
     source_originale = note["source"]
     if note["source"]:
