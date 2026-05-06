@@ -115,6 +115,15 @@ td.bold{font-weight:600}
 .btn-del-card:active{color:#ff6060;background:rgba(255,60,60,0.12)}
 .btn-del-sheet{width:100%;padding:12px;background:rgba(255,60,60,0.08);border:.5px solid rgba(255,60,60,0.25);border-radius:12px;color:rgba(255,110,110,0.8);font-size:14px;cursor:pointer;margin-top:14px;font-weight:500}
 .btn-del-sheet:active{background:rgba(255,60,60,0.16)}
+.sheet-actions{display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:8px}
+.btn-edit-sheet{background:none;border:.5px solid rgba(196,176,255,0.25);border-radius:8px;padding:6px 10px;color:var(--accent2);font-size:13px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s;flex-shrink:0}
+.btn-edit-sheet:active{background:rgba(196,176,255,0.12)}
+.edit-field{width:100%;background:rgba(255,255,255,0.07);border:.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none;margin-bottom:12px;-webkit-appearance:none;box-sizing:border-box;font-family:inherit;resize:none}
+.edit-field:focus{border-color:rgba(196,176,255,0.5);background:rgba(255,255,255,0.09)}
+.btn-save-edit{width:100%;padding:12px;background:rgba(196,176,255,0.12);border:.5px solid rgba(196,176,255,0.35);border-radius:12px;color:var(--accent2);font-size:14px;cursor:pointer;font-weight:600;margin-bottom:8px}
+.btn-save-edit:active{background:rgba(196,176,255,0.22)}
+.btn-cancel-edit{width:100%;padding:10px;background:none;border:.5px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer}
+.edit-status{text-align:center;font-size:13px;color:var(--accent2);padding:6px 0;display:none}
 .btn-del-confirm{width:100%;padding:14px;background:rgba(255,60,60,0.15);border:.5px solid rgba(255,60,60,0.4);border-radius:14px;color:#ff7070;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:10px}
 .btn-del-confirm:active{background:rgba(255,60,60,0.25)}
 #lien-input{width:100%;background:rgba(255,255,255,0.07);border:.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;color:#fff;font-size:14px;outline:none;margin-bottom:16px;-webkit-appearance:none;box-sizing:border-box}
@@ -302,7 +311,7 @@ async function openSheet(idx){
   const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${esc(n['Traduction FR'])}</div>`:'';
   const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${esc(n['Explication'])}</div>`:'';
   const ref=n['Référence']?`<div class="slabel">Référence</div><div class="svalue">${esc(n['Référence'])}</div>`:'';
-  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}<button class="btn-del-sheet" onclick="document.getElementById('overlay').classList.remove('open');confirmDelete(${idx})">🗑️ Supprimer cette note</button>`;
+  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}<div class="sheet-actions"><button class="btn-del-sheet" style="margin-top:0;flex:1" onclick="document.getElementById('overlay').classList.remove('open');confirmDelete(${idx})">🗑️ Supprimer</button><button class="btn-edit-sheet" onclick="openEditMode(${idx})">✏️</button></div>`;
   document.getElementById('overlay').classList.add('open');
 }
 function handleOverlayClick(e){if(e.target===document.getElementById('overlay')){document.getElementById('overlay').classList.remove('open');if(_vocalDone){_vocalDone=false;loadNotes();}}}
@@ -338,6 +347,43 @@ function confirmDelete(idx){
 }
 function closeDelOverlay(){document.getElementById('del-overlay').classList.remove('open');_delIdx=null;}
 function handleDelOverlayClick(e){if(e.target===document.getElementById('del-overlay'))closeDelOverlay();}
+function openEditMode(idx){
+  const n=allNotes[idx];
+  const sb=document.getElementById('sheet-body');
+  sb.innerHTML=`<div style="margin-bottom:14px;font-size:11px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.8px">Modifier la note</div>
+<div class="slabel">Thème</div><input class="edit-field" id="ef-theme">
+<div class="slabel">Source</div><input class="edit-field" id="ef-source">
+<div class="slabel">Référence</div><input class="edit-field" id="ef-reference">
+<div class="slabel">Explication</div><textarea class="edit-field" id="ef-explication" rows="3"></textarea>
+<div class="edit-status" id="edit-status"></div>
+<button class="btn-save-edit" onclick="saveEdit(${idx})">✅ Sauvegarder</button>
+<button class="btn-cancel-edit" onclick="openSheet(${idx})">Annuler</button>`;
+  document.getElementById('ef-theme').value=n['Thème']||'';
+  document.getElementById('ef-source').value=n['Source']||'';
+  document.getElementById('ef-reference').value=n['Référence']||'';
+  document.getElementById('ef-explication').value=n['Explication']||'';
+}
+async function saveEdit(idx){
+  const champs={
+    theme:document.getElementById('ef-theme').value.trim(),
+    source:document.getElementById('ef-source').value.trim(),
+    reference:document.getElementById('ef-reference').value.trim(),
+    explication:document.getElementById('ef-explication').value.trim(),
+  };
+  const st=document.getElementById('edit-status');
+  st.textContent='Sauvegarde…';st.style.display='block';
+  try{
+    const r=await fetch('/api/update-note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx,champs})});
+    const j=await r.json();
+    if(j.success){
+      allNotes[idx]['Thème']=champs.theme;
+      allNotes[idx]['Source']=champs.source;
+      allNotes[idx]['Référence']=champs.reference;
+      allNotes[idx]['Explication']=champs.explication;
+      openSheet(idx);
+    }else{st.textContent='❌ '+(j.error||'Erreur');}
+  }catch(e){st.textContent='❌ Erreur réseau';}
+}
 async function doDelete(){
   if(_delIdx===null)return;
   const idx=_delIdx;

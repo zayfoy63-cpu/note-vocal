@@ -160,6 +160,31 @@ def api_update_lien():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@flask_app.route("/api/update-note", methods=["POST"])
+def api_update_note():
+    try:
+        data = request.get_json(force=True)
+        idx = int(data.get("index", -1))
+        champs = data.get("champs", {})
+        notes = get_all_notes()
+        if idx < 0 or idx >= len(notes):
+            return jsonify({"success": False, "error": "Index invalide"}), 400
+        n = notes[idx]
+        row = idx + 2
+        note_updated = {
+            "theme": champs.get("theme", n.get("Thème", "")),
+            "source": champs.get("source", n.get("Source", "")),
+            "reference": champs.get("reference", n.get("Référence", "")),
+            "donnee": n.get("Donnée", ""),
+            "explication": champs.get("explication", n.get("Explication", "")),
+            "traduction_fr": n.get("Traduction FR", ""),
+            "lien": n.get("Lien", ""),
+        }
+        update_row(row, note_updated)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @flask_app.route("/api/delete-note", methods=["POST"])
 def api_delete_note():
     try:
