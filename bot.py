@@ -272,6 +272,110 @@ async def _pipeline_vocal(audio_data: bytes, mime_type: str) -> dict:
         },
     }
 
+@flask_app.route("/api/photo", methods=["POST"])
+def api_photo():
+    try:
+        if 'photo' not in request.files:
+            return jsonify({"success": False, "error": "Pas de photo reçue"}), 400
+        f = request.files['photo']
+        img_data = f.read()
+        if not img_data:
+            return jsonify({"success": False, "error": "Fichier vide"}), 400
+        mime_type = (f.content_type or 'image/jpeg').split(';')[0].strip()
+        return jsonify(asyncio.run(_pipeline_photo(img_data, mime_type)))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+async def _pipeline_photo(img_data: bytes, mime_type: str) -> dict:
+    # 1. Tentative ISBN
+    isbn = await lire_isbn_gemini(img_data)
+    if isbn:
+        livre = await asyncio.to_thread(google_books, isbn)
+        if livre and livre["titre"]:
+            source = cap(f"Livre de {livre['auteur']}") if livre["auteur"] else "Livre"
+            note = {
+                "theme": "Référence",
+                "source": normaliser_source(source, get_all_notes()),
+                "reference": isbn,
+                "donnee": cap(livre["titre"]),
+                "explication": cap(livre["description"]) if livre["description"] else "",
+                "traduction_fr": "",
+                "lien": livre["lien"],
+            }
+            save_to_sheet(note)
+            return {
+                "success": True,
+                "texte_original": f"ISBN : {isbn}",
+                "note_raw": {
+                    "Thème": note["theme"], "Source": note["source"],
+                    "Référence": note["reference"], "Donnée": note["donnee"],
+                    "Explication": note["explication"], "Traduction FR": "",
+                    "Lien": note["lien"],
+                },
+            }
+
+    # 2. Extraction de texte / note
+    themes_str = ", ".join(THEMES_PRINCIPAUX)
+    prompt_texte = (
+        "Tu es un assistant de prise de notes expert. Analyse cette image qui contient du texte "
+        "(imprimé ou manuscrit, en français ou arabe).\n"
+        "Retourne UNIQUEMENT un JSON valide :\n"
+        "{\n"
+        '  "texte_original": "le texte extrait exactement tel qu\'il apparaît sur la photo",\n'
+        '  "langue": "fr ou ar",\n'
+        f'  "theme": "thème parmi : {themes_str}. Sinon crée un thème.",\n'
+        '  "source": "si identifiable sur la photo (nom de livre, auteur...). null sinon.",\n'
+        '  "reference": "numéro de page si visible. null sinon.",\n'
+        '  "donnee": "concept ou citation principale extraite",\n'
+        '  "explication": "résumé intelligent et contexte du passage en 2-3 phrases",\n'
+        '  "traduction_fr": "si texte arabe : traduction française complète. sinon null"\n'
+        "}"
+    )
+    try:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                client_gemini.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Part.from_bytes(data=img_data, mime_type=mime_type),
+                    prompt_texte,
+                ],
+            ),
+            timeout=45,
+        )
+        match = re.search(r"\{.*\}", response.text.strip(), re.DOTALL)
+        if not match:
+            return {"success": False, "error": "Impossible d'extraire du texte de cette image."}
+        data = json.loads(match.group())
+    except asyncio.TimeoutError:
+        return {"success": False, "error": "Analyse trop longue (> 45 s), réessaie."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+    note = {
+        "theme": cap(data.get("theme") or "Autre"),
+        "source": cap(data.get("source") or ""),
+        "reference": str(data.get("reference")) if data.get("reference") else "",
+        "donnee": cap(data.get("donnee") or ""),
+        "explication": cap(data.get("explication") or ""),
+        "traduction_fr": data.get("traduction_fr") or "",
+        "lien": "",
+    }
+    if note["source"]:
+        note["source"] = normaliser_source(note["source"], get_all_notes())
+    save_to_sheet(note)
+
+    return {
+        "success": True,
+        "texte_original": data.get("texte_original") or "",
+        "note_raw": {
+            "Thème": note["theme"], "Source": note["source"],
+            "Référence": note["reference"], "Donnée": note["donnee"],
+            "Explication": note["explication"], "Traduction FR": note["traduction_fr"],
+            "Lien": note["lien"],
+        },
+    }
+
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     flask_app.run(host="0.0.0.0", port=port, debug=False)
@@ -767,90 +871,18 @@ async def cmd_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     fich = await context.bot.get_file(photo.file_id)
     img_bytes = bytes(await fich.download_as_bytearray())
-
-    # 1. Tentative ISBN
-    isbn = await lire_isbn_gemini(img_bytes)
-    if isbn:
-        await msg.edit_text(f"📖 ISBN `{isbn}` détecté — recherche en cours…", parse_mode="Markdown")
-        livre = await asyncio.to_thread(google_books, isbn)
-        if not livre or not livre["titre"]:
-            await msg.edit_text(
-                f"❌ ISBN `{isbn}` introuvable sur Google Books.\n"
-                "Le livre a bien été détecté mais ses métadonnées ne sont pas disponibles.",
-                parse_mode="Markdown",
-            )
-            return
-        source = cap(f"Livre de {livre['auteur']}") if livre["auteur"] else "Livre"
-        note = {
-            "theme": "Référence",
-            "source": normaliser_source(source, get_all_notes()),
-            "reference": isbn,
-            "donnee": cap(livre["titre"]),
-            "explication": cap(livre["description"]) if livre["description"] else "",
-            "traduction_fr": "",
-            "lien": livre["lien"],
-        }
-        save_to_sheet(note)
-        context.user_data["last_ref_donnee"] = note["donnee"]
-        await msg.edit_text(f"✅ *Livre enregistré !*\n\n{formater(note)}", parse_mode="Markdown")
+    d = await _pipeline_photo(img_bytes, "image/jpeg")
+    if not d["success"]:
+        await msg.edit_text(f"❌ {d['error']}")
         return
-
-    # 2. Extraction de texte / note depuis l'image
-    await msg.edit_text("🔍 Extraction du texte…")
-    themes_str = ", ".join(THEMES_PRINCIPAUX)
-    prompt_texte = (
-        "Tu es un assistant de prise de notes expert. Analyse cette image qui contient du texte "
-        "(imprimé ou manuscrit, en français ou arabe).\n"
-        "Retourne UNIQUEMENT un JSON valide :\n"
-        "{\n"
-        '  "texte_original": "le texte extrait exactement tel qu\'il apparaît sur la photo",\n'
-        '  "langue": "fr ou ar",\n'
-        f'  "theme": "thème parmi : {themes_str}. Sinon crée un thème.",\n'
-        '  "source": "si identifiable sur la photo (nom de livre, auteur...). null sinon.",\n'
-        '  "reference": "numéro de page si visible. null sinon.",\n'
-        '  "donnee": "concept ou citation principale extraite",\n'
-        '  "explication": "résumé intelligent et contexte du passage en 2-3 phrases",\n'
-        '  "traduction_fr": "si texte arabe : traduction française complète. sinon null"\n'
-        "}"
-    )
-    try:
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                client_gemini.models.generate_content,
-                model="gemini-2.5-flash",
-                contents=[
-                    types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
-                    prompt_texte,
-                ],
-            ),
-            timeout=45,
-        )
-        match = re.search(r"\{.*\}", response.text.strip(), re.DOTALL)
-        if not match:
-            await msg.edit_text("❌ Impossible d'extraire du texte de cette image.")
-            return
-        data = json.loads(match.group())
-    except asyncio.TimeoutError:
-        await msg.edit_text("⏱️ Analyse trop longue (> 45 s), réessaie.")
-        return
-    except Exception as e:
-        await msg.edit_text(f"❌ Erreur lors de l'analyse : {e}")
-        return
-
-    note = {
-        "theme": cap(data.get("theme") or "Autre"),
-        "source": cap(data.get("source") or ""),
-        "reference": str(data.get("reference")) if data.get("reference") else "",
-        "donnee": cap(data.get("donnee") or ""),
-        "explication": cap(data.get("explication") or ""),
-        "traduction_fr": data.get("traduction_fr") or "",
-        "lien": "",
-    }
-    if note["source"]:
-        note["source"] = normaliser_source(note["source"], get_all_notes())
-    save_to_sheet(note)
-
-    texte_original = data.get("texte_original") or ""
+    n = d["note_raw"]
+    note = {k.lower().replace(" ", "_"): v for k, v in n.items()}
+    note = {"theme": n["Thème"], "source": n["Source"], "reference": n["Référence"],
+            "donnee": n["Donnée"], "explication": n["Explication"],
+            "traduction_fr": n["Traduction FR"], "lien": n["Lien"]}
+    if n["Thème"] == "Référence":
+        context.user_data["last_ref_donnee"] = n["Donnée"]
+    texte_original = d.get("texte_original") or ""
     extrait = f"\n\n📄 *Texte extrait :*\n_{texte_original[:300]}{'…' if len(texte_original) > 300 else ''}_" if texte_original else ""
     await msg.edit_text(f"✅ *Note sauvegardée !*\n\n{formater(note)}{extrait}", parse_mode="Markdown")
 
