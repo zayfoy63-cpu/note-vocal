@@ -317,19 +317,20 @@ async def _pipeline_photo(img_data: bytes, mime_type: str) -> dict:
     # 2. Extraction de texte / note
     themes_str = ", ".join(THEMES_PRINCIPAUX)
     prompt_texte = (
-        "Tu es un assistant de prise de notes expert. Analyse cette image qui contient du texte "
-        "(imprimé ou manuscrit, en français ou arabe).\n"
-        "Retourne UNIQUEMENT un JSON valide :\n"
+        "Tu es un expert en extraction et analyse de texte. Analyse cette image et retourne UNIQUEMENT un JSON valide sans markdown :\n"
         "{\n"
-        '  "texte_original": "le texte extrait exactement tel qu\'il apparaît sur la photo",\n'
-        '  "langue": "fr ou ar",\n'
-        f'  "theme": "thème parmi : {themes_str}. Sinon crée un thème.",\n'
-        '  "source": "si identifiable sur la photo (nom de livre, auteur...). null sinon.",\n'
+        f'  "theme": "parmi : {themes_str}. Sinon crée un thème pertinent.",\n'
+        '  "source": "si un titre de livre ou auteur est visible sur la photo. null sinon.",\n'
         '  "reference": "numéro de page si visible. null sinon.",\n'
-        '  "donnee": "concept ou citation principale extraite",\n'
-        '  "explication": "résumé intelligent et contexte du passage en 2-3 phrases",\n'
-        '  "traduction_fr": "si texte arabe : traduction française complète. sinon null"\n'
-        "}"
+        '  "donnee": "si texte arabe présent : extrais le texte arabe EXACTEMENT tel qu\'il apparaît sur la photo, en script arabe avec tashkeel si présents. Si texte français uniquement : extrais la citation ou concept principal.",\n'
+        '  "explication": "résumé intelligent du passage en 2-3 phrases, dans la même langue que le texte principal.",\n'
+        '  "traduction_fr": "si texte arabe détecté : traduction française complète et précise du texte arabe. Si texte déjà en français : null.",\n'
+        '  "texte_complet": "tout le texte extrait de la photo tel quel, sans modification."\n'
+        "}\n"
+        "Règles :\n"
+        "- Si la photo contient arabe ET sa traduction française : mets l'arabe dans donnee et la traduction dans traduction_fr\n"
+        "- Préserve les voyelles arabes (tashkeel) si présentes sur la photo\n"
+        "- Si texte manuscrit : transcris fidèlement même si écriture difficile"
     )
     try:
         response = await asyncio.wait_for(
@@ -345,12 +346,15 @@ async def _pipeline_photo(img_data: bytes, mime_type: str) -> dict:
         )
         match = re.search(r"\{.*\}", response.text.strip(), re.DOTALL)
         if not match:
-            return {"success": False, "error": "Impossible d'extraire du texte de cette image."}
+            return {"success": False, "error": "📷 Je n'arrive pas à lire le texte sur cette photo. Essaie avec une meilleure luminosité ou un cadrage plus proche."}
         data = json.loads(match.group())
     except asyncio.TimeoutError:
-        return {"success": False, "error": "Analyse trop longue (> 45 s), réessaie."}
+        return {"success": False, "error": "⏱️ Analyse trop longue. Réessaie dans quelques secondes."}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+    if not data.get("donnee") and not data.get("texte_complet"):
+        return {"success": False, "error": "📷 Je n'arrive pas à lire le texte sur cette photo. Essaie avec une meilleure luminosité ou un cadrage plus proche."}
 
     note = {
         "theme": cap(data.get("theme") or "Autre"),
@@ -367,7 +371,7 @@ async def _pipeline_photo(img_data: bytes, mime_type: str) -> dict:
 
     return {
         "success": True,
-        "texte_original": data.get("texte_original") or "",
+        "texte_original": data.get("texte_complet") or "",
         "note_raw": {
             "Thème": note["theme"], "Source": note["source"],
             "Référence": note["reference"], "Donnée": note["donnee"],
@@ -830,6 +834,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• _\"Montre mes dernières notes\"_\n"
         "• _\"Modifie la note sur les habitudes\"_\n"
         "• _\"Supprime la note sur le stoïcisme\"_\n\n"
+        "📷 *Photo d'un livre ou document* → envoie la photo directement, j'extrais et structure la note automatiquement\\. Tu peux aussi envoyer une photo depuis ta galerie\\.\n\n"
         "*Commandes texte :*\n"
         "/notes — 5 dernières notes\n"
         "/chercher \\[mot\\] — rechercher\n"
@@ -873,17 +878,16 @@ async def cmd_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     img_bytes = bytes(await fich.download_as_bytearray())
     d = await _pipeline_photo(img_bytes, "image/jpeg")
     if not d["success"]:
-        await msg.edit_text(f"❌ {d['error']}")
+        await msg.edit_text(d["error"])
         return
     n = d["note_raw"]
-    note = {k.lower().replace(" ", "_"): v for k, v in n.items()}
     note = {"theme": n["Thème"], "source": n["Source"], "reference": n["Référence"],
             "donnee": n["Donnée"], "explication": n["Explication"],
             "traduction_fr": n["Traduction FR"], "lien": n["Lien"]}
     if n["Thème"] == "Référence":
         context.user_data["last_ref_donnee"] = n["Donnée"]
-    texte_original = d.get("texte_original") or ""
-    extrait = f"\n\n📄 *Texte extrait :*\n_{texte_original[:300]}{'…' if len(texte_original) > 300 else ''}_" if texte_original else ""
+    texte_complet = d.get("texte_original") or ""
+    extrait = f"\n\n📄 *Texte extrait :*\n\"{texte_complet[:400]}{'…' if len(texte_complet) > 400 else ''}\"" if texte_complet else ""
     await msg.edit_text(f"✅ *Note sauvegardée !*\n\n{formater(note)}{extrait}", parse_mode="Markdown")
 
 async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
