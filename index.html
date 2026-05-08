@@ -164,6 +164,15 @@ td.bold{font-weight:600}
 </head>
 <body>
 <canvas id="canvas"></canvas>
+<div id="crop-overlay">
+  <div id="crop-header">
+    <button class="crop-act" onclick="cancelCrop()">Annuler</button>
+    <span id="crop-counter">Recadrer</span>
+    <button class="crop-act" onclick="confirmCrop()">Envoyer ✓</button>
+  </div>
+  <div id="crop-viewport"><img id="crop-img" alt=""></div>
+  <div id="crop-hint">Pincer pour zoomer · Glisser pour recadrer</div>
+</div>
 <div class="header">
   <div class="header-top">
     <div class="logo">
@@ -707,14 +716,5 @@ function drawNet(){ctx.clearRect(0,0,cv.width,cv.height);nodes.forEach(n=>{n.x+=
 window.addEventListener('resize',initCanvas);initCanvas();drawNet();
 loadNotes();
 </script>
-<div id="crop-overlay">
-  <div id="crop-header">
-    <button class="crop-act" onclick="cancelCrop()">Annuler</button>
-    <span id="crop-counter">Recadrer</span>
-    <button class="crop-act" onclick="confirmCrop()">Envoyer ✓</button>
-  </div>
-  <div id="crop-viewport"><img id="crop-img" alt=""></div>
-  <div id="crop-hint">Pincer pour zoomer · Glisser pour recadrer</div>
-</div>
 </body>
 </html>
