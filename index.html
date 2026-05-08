@@ -124,6 +124,13 @@ td.bold{font-weight:600}
 .btn-save-edit:active{background:rgba(196,176,255,0.22)}
 .btn-cancel-edit{width:100%;padding:10px;background:none;border:.5px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer}
 .edit-status{text-align:center;font-size:13px;color:var(--accent2);padding:6px 0;display:none}
+.link-result{padding:10px 12px;background:rgba(255,255,255,0.04);border:.5px solid rgba(255,255,255,0.08);border-radius:10px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s}
+.link-result:active{background:rgba(139,111,255,0.12)}
+.link-result-theme{font-size:10px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.6px}
+.link-result-donnee{font-size:14px;color:rgba(255,255,255,.75);margin-top:3px;line-height:1.4}
+.link-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.link-chip{background:rgba(139,111,255,0.12);border:.5px solid rgba(139,111,255,0.3);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--accent2);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.link-chip:active{background:rgba(139,111,255,0.22)}
 .btn-del-confirm{width:100%;padding:14px;background:rgba(255,60,60,0.15);border:.5px solid rgba(255,60,60,0.4);border-radius:14px;color:#ff7070;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:10px}
 .btn-del-confirm:active{background:rgba(255,60,60,0.25)}
 #lien-input{width:100%;background:rgba(255,255,255,0.07);border:.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;color:#fff;font-size:14px;outline:none;margin-bottom:16px;-webkit-appearance:none;box-sizing:border-box}
@@ -186,7 +193,7 @@ td.bold{font-weight:600}
 <button class="mic-fab" id="mic-fab" aria-label="Enregistrer une note vocale">
   <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
 </button>
-<input type="file" id="photo-input" accept="image/*" style="display:none" onchange="handlePhotoFile(event)">
+<input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFile(event)">
 <button class="photo-fab" id="photo-fab" onclick="document.getElementById('photo-input').click()" aria-label="Prendre une photo">
   <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
 </button>
@@ -327,7 +334,9 @@ async function openSheet(idx){
   const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${esc(n['Traduction FR'])}</div>`:'';
   const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${esc(n['Explication'])}</div>`:'';
   const ref=n['Référence']?`<div class="slabel">Référence</div><div class="svalue">${esc(n['Référence'])}</div>`:'';
-  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}<div class="sheet-actions"><button class="btn-del-sheet" style="margin-top:0;flex:1" onclick="document.getElementById('overlay').classList.remove('open');confirmDelete(${idx})">🗑️ Supprimer</button><button class="btn-edit-sheet" onclick="openEditMode(${idx})">✏️</button></div>`;
+  const liensNotes=(n['Notes liées']||'').split('|').filter(Boolean);
+  const liensHtml=liensNotes.length?`<div class="slabel">Notes liées</div><div class="link-chips">${liensNotes.map(d=>`<span class="link-chip" onclick="searchAndOpenNote(${idx},'${esc(d.replace(/'/g,"\\'"))}')">${esc(d.length>40?d.substring(0,40)+'…':d)}</span>`).join('')}</div>`:'';
+  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}${liensHtml}<div class="sheet-actions"><button class="btn-del-sheet" style="margin-top:0;flex:1" onclick="document.getElementById('overlay').classList.remove('open');confirmDelete(${idx})">🗑️ Supprimer</button><button class="btn-edit-sheet" onclick="openLinkMode(${idx})" title="Lier">🔗</button><button class="btn-edit-sheet" onclick="openEditMode(${idx})">✏️</button></div>`;
   document.getElementById('overlay').classList.add('open');
 }
 function handleOverlayClick(e){if(e.target===document.getElementById('overlay')){document.getElementById('overlay').classList.remove('open');if(_vocalDone){_vocalDone=false;loadNotes();}}}
@@ -399,6 +408,45 @@ async function saveEdit(idx){
       openSheet(idx);
     }else{st.textContent='❌ '+(j.error||'Erreur');}
   }catch(e){st.textContent='❌ Erreur réseau';}
+}
+function openLinkMode(idx){
+  const sb=document.getElementById('sheet-body');
+  sb.innerHTML=`<div style="margin-bottom:14px;font-size:11px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.8px">Lier à une autre note</div>
+<input class="edit-field" id="link-search" placeholder="Rechercher…" oninput="searchNotesForLink(${idx},this.value)" autocomplete="off">
+<div id="link-results"></div>
+<div class="edit-status" id="link-status"></div>
+<button class="btn-cancel-edit" onclick="openSheet(${idx})">Annuler</button>`;
+  setTimeout(()=>document.getElementById('link-search')?.focus(),100);
+}
+function searchNotesForLink(fromIdx,query){
+  const res=document.getElementById('link-results');
+  if(!query.trim()){res.innerHTML='';return;}
+  const q=query.toLowerCase();
+  const matches=allNotes.map((n,i)=>({n,i})).filter(({n,i})=>i!==fromIdx&&(
+    (n['Donnée']||'').toLowerCase().includes(q)||
+    (n['Thème']||'').toLowerCase().includes(q)||
+    (n['Source']||'').toLowerCase().includes(q)
+  )).slice(0,5);
+  if(!matches.length){res.innerHTML='<div style="color:rgba(255,255,255,.3);font-size:13px;padding:8px 0">Aucune note trouvée</div>';return;}
+  res.innerHTML=matches.map(({n,i})=>`<div class="link-result" onclick="saveLinkTo(${fromIdx},${i})"><div class="link-result-theme">${esc(n['Thème']||'')}</div><div class="link-result-donnee">${esc((n['Donnée']||'').substring(0,60))}${(n['Donnée']||'').length>60?'…':''}</div></div>`).join('');
+}
+async function saveLinkTo(fromIdx,toIdx){
+  const st=document.getElementById('link-status');
+  st.textContent='Liaison en cours…';st.style.display='block';
+  try{
+    const r=await fetch('/api/link-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idx_from:fromIdx,idx_to:toIdx})});
+    const d=await r.json();
+    if(d.success){
+      allNotes[fromIdx]['Notes liées']=d.liens_from;
+      allNotes[toIdx]['Notes liées']=d.liens_to;
+      st.textContent='✅ Notes liées !';
+      setTimeout(()=>openSheet(fromIdx),700);
+    }else{st.textContent='❌ '+(d.error||'Erreur');}
+  }catch(e){st.textContent='❌ Erreur réseau';}
+}
+function searchAndOpenNote(currentIdx,donnee){
+  const idx=allNotes.findIndex(n=>(n['Donnée']||'').startsWith(donnee.substring(0,40)));
+  if(idx>=0)openSheet(idx);
 }
 async function doDelete(){
   if(_delIdx===null)return;
@@ -511,11 +559,18 @@ async function saveVocalLien(){
 }
 initMic();
 // ── Photo ─────────────────────────────────────────────────────────────────────
+let _cropQueue=[],_croppedBlobs=[],_cropTotal=0;
 function handlePhotoFile(e){
-  const file=e.target.files[0];
-  if(!file)return;
+  const files=Array.from(e.target.files);
+  if(!files.length)return;
   e.target.value='';
-  openCrop(file);
+  _croppedBlobs=[];_cropQueue=files.slice(1);_cropTotal=files.length;
+  _updateCropCounter();
+  openCrop(files[0]);
+}
+function _updateCropCounter(){
+  const cur=_cropTotal-_cropQueue.length;
+  document.getElementById('crop-counter').textContent=_cropTotal>1?`Photo ${cur}/${_cropTotal}`:'Recadrer';
 }
 // ── Crop ─────────────────────────────────────────────────────────────────────
 let _cropX=0,_cropY=0,_cropScale=1,_cropLastDist=0,_cropDrag=false,_cropLX=0,_cropLY=0;
@@ -538,6 +593,7 @@ function openCrop(file){
 function cancelCrop(){
   document.getElementById('crop-overlay').classList.remove('open');
   document.getElementById('crop-img').src='';
+  _cropQueue=[];_croppedBlobs=[];_cropTotal=0;
 }
 function confirmCrop(){
   const img=document.getElementById('crop-img');
@@ -546,7 +602,18 @@ function confirmCrop(){
   const c=document.createElement('canvas');
   c.width=w;c.height=h;
   c.getContext('2d').drawImage(img,_cropX,_cropY,img.naturalWidth*_cropScale,img.naturalHeight*_cropScale);
-  c.toBlob(blob=>{cancelCrop();sendPhoto(new File([blob],'photo.jpg',{type:'image/jpeg'}));},'image/jpeg',0.92);
+  c.toBlob(blob=>{
+    _croppedBlobs.push(blob);
+    if(_cropQueue.length>0){
+      const next=_cropQueue.shift();
+      _updateCropCounter();
+      openCrop(next);
+    }else{
+      const blobs=[..._croppedBlobs];
+      cancelCrop();
+      blobs.length===1?sendPhoto(new File([blobs[0]],'photo.jpg',{type:'image/jpeg'})):sendPhotos(blobs);
+    }
+  },'image/jpeg',0.92);
 }
 (function(){
   const vp=document.getElementById('crop-viewport');
@@ -595,6 +662,21 @@ async function sendPhoto(file){
     b.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">Erreur réseau</div></div>';
   }
 }
+async function sendPhotos(blobs){
+  const b=document.getElementById('sheet-body');
+  b.innerHTML=`<div class="loading"><div class="spinner"></div><div class="loading-txt">Analyse des ${blobs.length} photos…</div></div>`;
+  document.getElementById('overlay').classList.add('open');
+  try{
+    const fd=new FormData();
+    blobs.forEach((blob,i)=>fd.append('photos',blob,`photo${i}.jpg`));
+    const r=await fetch('/api/photo-multi',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.success)showPhotoResult(d);
+    else b.innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">${esc(d.error||'Erreur inconnue')}</div></div>`;
+  }catch(e){
+    b.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">Erreur réseau</div></div>';
+  }
+}
 function showPhotoResult(d){
   const n=d.note_raw;
   const isAr=/[؀-ۿ]/.test(n['Donnée']||'');
@@ -628,7 +710,7 @@ loadNotes();
 <div id="crop-overlay">
   <div id="crop-header">
     <button class="crop-act" onclick="cancelCrop()">Annuler</button>
-    <span>Recadrer</span>
+    <span id="crop-counter">Recadrer</span>
     <button class="crop-act" onclick="confirmCrop()">Envoyer ✓</button>
   </div>
   <div id="crop-viewport"><img id="crop-img" alt=""></div>
