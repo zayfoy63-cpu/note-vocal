@@ -317,20 +317,28 @@ async def _pipeline_photo(img_data: bytes, mime_type: str) -> dict:
     # 2. Extraction de texte / note
     themes_str = ", ".join(THEMES_PRINCIPAUX)
     prompt_texte = (
-        "Tu es un expert en extraction et analyse de texte. Analyse cette image et retourne UNIQUEMENT un JSON valide sans markdown :\n"
+        "Tu es un expert OCR spécialisé en arabe et français. "
+        "Lis cette image MOT PAR MOT, de droite à gauche pour l'arabe.\n\n"
+        "ÉTAPE 1 — TRANSCRIPTION BRUTE :\n"
+        "Lis chaque ligne du texte visible sur la photo dans l'ordre exact d'apparition. "
+        "Ne saute aucun mot, ne réorganise pas, ne corrige pas. "
+        "Pour l'arabe : respecte l'ordre RTL (droite → gauche), préserve chaque lettre, "
+        "chaque voyelle (tashkeel : فَتْحَة، كَسْرَة، ضَمَّة، سُكُون، شَدَّة) exactement comme sur la photo.\n\n"
+        "ÉTAPE 2 — RETOURNE ce JSON valide sans markdown :\n"
         "{\n"
         f'  "theme": "parmi : {themes_str}. Sinon crée un thème pertinent.",\n'
-        '  "source": "si un titre de livre ou auteur est visible sur la photo. null sinon.",\n'
+        '  "source": "titre de livre ou auteur visible sur la photo. null sinon.",\n'
         '  "reference": "numéro de page si visible. null sinon.",\n'
-        '  "donnee": "si texte arabe présent : extrais le texte arabe EXACTEMENT tel qu\'il apparaît sur la photo, en script arabe avec tashkeel si présents. Si texte français uniquement : extrais la citation ou concept principal.",\n'
-        '  "explication": "résumé intelligent du passage en 2-3 phrases, dans la même langue que le texte principal.",\n'
-        '  "traduction_fr": "si texte arabe détecté : traduction française complète et précise du texte arabe. Si texte déjà en français : null.",\n'
-        '  "texte_complet": "tout le texte extrait de la photo tel quel, sans modification."\n'
-        "}\n"
-        "Règles :\n"
-        "- Si la photo contient arabe ET sa traduction française : mets l'arabe dans donnee et la traduction dans traduction_fr\n"
-        "- Préserve les voyelles arabes (tashkeel) si présentes sur la photo\n"
-        "- Si texte manuscrit : transcris fidèlement même si écriture difficile"
+        '  "donnee": "si arabe : le texte arabe complet, mot par mot dans l\'ordre exact, avec tashkeel. Si français : citation ou concept principal.",\n'
+        '  "explication": "résumé du passage en 2-3 phrases dans la langue du texte.",\n'
+        '  "traduction_fr": "si arabe : traduction française complète et fidèle. Si français : null.",\n'
+        '  "texte_complet": "TOUT le texte de la photo transcrit mot par mot, ligne par ligne, sans rien omettre ni modifier."\n'
+        "}\n\n"
+        "RÈGLES CRITIQUES :\n"
+        "- Ne jamais sauter un mot, même difficile à lire → écris [?] si illisible\n"
+        "- Ne jamais inverser deux mots\n"
+        "- Arabe + traduction française sur la même photo → arabe dans donnee, traduction dans traduction_fr\n"
+        "- Manuscrit → transcris fidèlement, mot par mot"
     )
     try:
         response = await asyncio.wait_for(
