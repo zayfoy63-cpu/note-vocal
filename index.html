@@ -186,6 +186,19 @@ td.bold{font-weight:600}
 <button class="mic-fab" id="mic-fab" aria-label="Enregistrer une note vocale">
   <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
 </button>
+<input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFile(event)">
+<button class="photo-fab" onclick="document.getElementById('photo-input').click()" aria-label="Ajouter une photo">
+  <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+</button>
+<div id="crop-overlay">
+  <div id="crop-header">
+    <button class="crop-act" onclick="cancelCrop()">✕ Annuler</button>
+    <span id="crop-counter">Recadrer</span>
+    <button class="crop-act" onclick="confirmCrop()">Envoyer ✓</button>
+  </div>
+  <div id="crop-viewport"><img id="crop-img" alt=""></div>
+  <div id="crop-hint">Pincer pour zoomer · Glisser pour recadrer</div>
+</div>
 <div class="overlay" id="del-overlay" onclick="handleDelOverlayClick(event)">
   <div class="sheet"><div class="handle"></div>
     <div class="sheet-body" style="padding:0 18px 24px">
