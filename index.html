@@ -125,6 +125,9 @@ td.bold{font-weight:600}
 .mic-fab.recording{background:linear-gradient(135deg,#ff5050,#cc1800);animation:mpulse 1s ease-in-out infinite}
 @keyframes mpulse{0%,100%{box-shadow:0 4px 20px rgba(255,60,60,.55)}50%{box-shadow:0 4px 32px rgba(255,60,60,.9),0 0 0 14px rgba(255,60,60,.08)}}
 .mic-fab svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;pointer-events:none}
+.import-fab{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));right:84px;width:46px;height:46px;border-radius:50%;background:rgba(139,111,255,0.18);border:.5px solid rgba(139,111,255,0.45);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;box-shadow:0 2px 12px rgba(107,78,255,0.25);-webkit-tap-highlight-color:transparent;transition:background .15s}
+.import-fab:active{background:rgba(139,111,255,0.35)}
+.import-fab svg{width:19px;height:19px;stroke:#C4B0FF;fill:none;stroke-width:2;pointer-events:none}
 .mic-tip{position:fixed;bottom:calc(138px + env(safe-area-inset-bottom,0px));right:14px;background:rgba(22,18,48,.95);border:.5px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 13px;font-size:12px;color:#fff;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:25;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
 .mic-tip.on{opacity:1}
 /* ── Résultat vocal ── */
@@ -166,6 +169,10 @@ td.bold{font-weight:600}
 <button class="mic-fab" id="mic-fab" aria-label="Enregistrer une note vocale">
   <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
 </button>
+<button class="import-fab" id="import-fab" aria-label="Importer un audio" onclick="document.getElementById('audio-file-input').click()">
+  <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+</button>
+<input type="file" id="audio-file-input" accept="audio/*" style="display:none" onchange="importAudioFile(this)">
 <div class="overlay" id="del-overlay" onclick="handleDelOverlayClick(event)">
   <div class="sheet"><div class="handle"></div>
     <div class="sheet-body" style="padding:0 18px 24px">
@@ -450,6 +457,19 @@ async function saveVocalLien(){
   }catch(e){if(st)st.textContent='❌ Erreur réseau';}
 }
 initMic();
+function importAudioFile(input){
+  const file=input.files[0];
+  input.value=''; // reset pour permettre de re-sélectionner le même fichier
+  if(!file)return;
+  const maxMb=50;
+  if(file.size>maxMb*1024*1024){
+    alert(`Fichier trop lourd (max ${maxMb} Mo).`);return;
+  }
+  const mime=file.type||'audio/mpeg';
+  const reader=new FileReader();
+  reader.onload=e=>sendVocal(new Blob([e.target.result],{type:mime}));
+  reader.readAsArrayBuffer(file);
+}
 let currentLienIdx=-1;
 function openLienEditor(idx){currentLienIdx=idx;const n=allNotes[idx];document.getElementById('lien-ref-title').textContent=n['Donnée']||'';document.getElementById('lien-input').value=n['Lien']||'';document.getElementById('lien-status').style.display='none';document.getElementById('lien-overlay').classList.add('open')}
 function closeLienOverlay(){document.getElementById('lien-overlay').classList.remove('open');currentLienIdx=-1}
