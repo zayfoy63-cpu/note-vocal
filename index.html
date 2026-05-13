@@ -440,24 +440,31 @@ async function saveEdit(idx){
 }
 function openLinkMode(idx){
   const sb=document.getElementById('sheet-body');
-  sb.innerHTML=`<div style="margin-bottom:14px;font-size:11px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.8px">Lier à une autre note</div>
-<input class="edit-field" id="link-search" placeholder="Rechercher…" oninput="searchNotesForLink(${idx},this.value)" autocomplete="off">
-<div id="link-results"></div>
+  sb.innerHTML=`<div style="margin-bottom:12px;font-size:11px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.8px">Lier à une autre note</div>
+<input class="edit-field" id="link-search" placeholder="Filtrer…" oninput="renderLinkList(${idx},this.value)" autocomplete="off" style="margin-bottom:10px">
+<div id="link-results" style="max-height:52vh;overflow-y:auto"></div>
 <div class="edit-status" id="link-status"></div>
 <button class="btn-cancel-edit" onclick="openSheet(${idx})">Annuler</button>`;
-  setTimeout(()=>document.getElementById('link-search')?.focus(),100);
+  renderLinkList(idx,'');
 }
-function searchNotesForLink(fromIdx,query){
+function renderLinkList(fromIdx,query){
   const res=document.getElementById('link-results');
-  if(!query.trim()){res.innerHTML='';return;}
-  const q=query.toLowerCase();
-  const matches=allNotes.map((n,i)=>({n,i})).filter(({n,i})=>i!==fromIdx&&(
-    (n['Donnée']||'').toLowerCase().includes(q)||
-    (n['Thème']||'').toLowerCase().includes(q)||
-    (n['Source']||'').toLowerCase().includes(q)
-  )).slice(0,5);
-  if(!matches.length){res.innerHTML='<div style="color:rgba(255,255,255,.3);font-size:13px;padding:8px 0">Aucune note trouvée</div>';return;}
-  res.innerHTML=matches.map(({n,i})=>`<div class="link-result" onclick="saveLinkTo(${fromIdx},${i})"><div class="link-result-theme">${esc(n['Thème']||'')}</div><div class="link-result-donnee">${esc((n['Donnée']||'').substring(0,60))}${(n['Donnée']||'').length>60?'…':''}</div></div>`).join('');
+  const q=query.trim().toLowerCase();
+  const liees=(allNotes[fromIdx]['Notes liées']||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const matches=allNotes.map((n,i)=>({n,i})).filter(({n,i})=>{
+    if(i===fromIdx)return false;
+    if(!q)return true;
+    const titre=cardTitle(n).toLowerCase();
+    return titre.includes(q)||(n['Thème']||'').toLowerCase().includes(q)||(n['Explication']||'').toLowerCase().includes(q)||(n['Donnée']||'').toLowerCase().includes(q);
+  });
+  if(!matches.length){res.innerHTML='<div style="color:rgba(255,255,255,.3);font-size:13px;padding:8px 0">Aucune note</div>';return;}
+  res.innerHTML=matches.map(({n,i})=>{
+    const dejalie=liees.includes(cardTitle(n).substring(0,40))||liees.some(l=>l.startsWith((n['Donnée']||'').substring(0,20)));
+    return`<div class="link-result" onclick="saveLinkTo(${fromIdx},${i})" style="${dejalie?'opacity:.45':''}">
+      <div class="link-result-theme">${esc(n['Thème']||'')}${dejalie?' · déjà liée':''}</div>
+      <div class="link-result-donnee">${esc(cardTitle(n))}</div>
+    </div>`;
+  }).join('');
 }
 async function saveLinkTo(fromIdx,toIdx){
   const st=document.getElementById('link-status');
