@@ -227,9 +227,16 @@ td.bold{font-weight:600}
 <div class="overlay" id="lien-overlay" onclick="handleLienOverlayClick(event)">
   <div class="sheet"><div class="handle"></div>
     <div class="sheet-body" style="padding:0 18px 24px">
-      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px">Ajouter un lien</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.42);margin-bottom:16px" id="lien-ref-title"></div>
-      <input type="url" id="lien-input" placeholder="https://…" autocomplete="off">
+      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:4px">Ajouter un lien</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.42);margin-bottom:18px" id="lien-ref-title"></div>
+      <button class="btn-confirm" id="btn-coller" onclick="collerLien()" style="margin-bottom:10px;background:linear-gradient(135deg,rgba(139,111,255,0.35),rgba(107,78,255,0.25));border:.5px solid rgba(139,111,255,0.5)">📋 Coller depuis le presse-papiers</button>
+      <div id="lien-preview" style="display:none;background:rgba(255,255,255,0.05);border:.5px solid rgba(255,255,255,0.1);border-radius:10px;padding:10px 13px;font-size:12px;color:rgba(255,255,255,0.55);word-break:break-all;margin-bottom:10px"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="flex:1;height:.5px;background:rgba(255,255,255,0.1)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.25)">ou saisir manuellement</span>
+        <div style="flex:1;height:.5px;background:rgba(255,255,255,0.1)"></div>
+      </div>
+      <input type="text" id="lien-input" placeholder="https://…" autocomplete="off" inputmode="url" oninput="_showLienPreview(this.value.trim())">
       <div id="lien-status" style="text-align:center;font-size:13px;color:var(--accent2);padding-bottom:10px;display:none"></div>
       <button class="btn-confirm" onclick="saveLienFromEditor()">Sauvegarder</button>
       <button class="btn-cancel" onclick="closeLienOverlay()">Annuler</button>
@@ -721,7 +728,43 @@ function showPhotoResult(d){
   loadNotes();
 }
 let currentLienIdx=-1;
-function openLienEditor(idx){currentLienIdx=idx;const n=allNotes[idx];document.getElementById('lien-ref-title').textContent=n['Donnée']||'';document.getElementById('lien-input').value=n['Lien']||'';document.getElementById('lien-status').style.display='none';document.getElementById('lien-overlay').classList.add('open')}
+async function openLienEditor(idx){
+  currentLienIdx=idx;
+  const n=allNotes[idx];
+  document.getElementById('lien-ref-title').textContent=cardTitle(n)||n['Donnée']||'';
+  document.getElementById('lien-input').value=n['Lien']||'';
+  document.getElementById('lien-status').style.display='none';
+  document.getElementById('lien-preview').style.display='none';
+  document.getElementById('lien-preview').textContent='';
+  document.getElementById('lien-overlay').classList.add('open');
+  // Pré-remplit depuis le presse-papiers si URL détectée
+  try{
+    const txt=(await navigator.clipboard.readText()).trim();
+    if(txt.startsWith('http')&&!n['Lien']){
+      document.getElementById('lien-input').value=txt;
+      _showLienPreview(txt);
+    }
+  }catch(_){}
+}
+async function collerLien(){
+  try{
+    const txt=(await navigator.clipboard.readText()).trim();
+    if(!txt){document.getElementById('lien-status').textContent='Presse-papiers vide';document.getElementById('lien-status').style.display='block';return;}
+    document.getElementById('lien-input').value=txt;
+    _showLienPreview(txt);
+    document.getElementById('lien-status').style.display='none';
+  }catch(e){
+    // Fallback : focus sur le champ pour que l'utilisateur colle manuellement
+    document.getElementById('lien-input').focus();
+    document.getElementById('lien-status').textContent='Collez le lien dans le champ ci-dessus (Ctrl+V / appui long)';
+    document.getElementById('lien-status').style.display='block';
+  }
+}
+function _showLienPreview(url){
+  const p=document.getElementById('lien-preview');
+  if(url.startsWith('http')){p.textContent='🔗 '+url;p.style.display='block';}
+  else{p.style.display='none';}
+}
 function closeLienOverlay(){document.getElementById('lien-overlay').classList.remove('open');currentLienIdx=-1}
 function handleLienOverlayClick(e){if(e.target===document.getElementById('lien-overlay'))closeLienOverlay()}
 async function saveLienFromEditor(){
