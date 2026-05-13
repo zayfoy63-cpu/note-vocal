@@ -32,7 +32,7 @@ client_gemini = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 flask_app = Flask(__name__, static_folder=".")
 
 ATTENTE_CORRECTION = 1
-COLONNES = ["Thème", "Source", "Référence", "Donnée", "Explication", "Traduction FR", "Lien"]
+COLONNES = ["Thème", "Source", "Référence", "Donnée", "Explication", "Traduction FR", "Lien", "Notes liées"]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 THEMES_PRINCIPAUX = [
     "Philosophie", "Religion", "Psychologie", "Économie", "Finance",
@@ -49,8 +49,11 @@ def get_sheet():
     return client.open_by_key(os.environ["SPREADSHEET_ID"]).sheet1
 
 def init_sheet(sheet):
-    if not sheet.row_values(1):
+    row1 = sheet.row_values(1)
+    if not row1:
         sheet.append_row(COLONNES)
+    elif "Notes liées" not in row1:
+        sheet.update_cell(1, len(row1) + 1, "Notes liées")
 
 def save_to_sheet(note: dict):
     sheet = get_sheet()
@@ -58,17 +61,17 @@ def save_to_sheet(note: dict):
     sheet.append_row([
         note.get("theme", ""), note.get("source", ""), note.get("reference", ""),
         note.get("donnee", ""), note.get("explication", ""),
-        note.get("traduction_fr", ""), note.get("lien", ""),
+        note.get("traduction_fr", ""), note.get("lien", ""), note.get("notes_liees", ""),
     ])
 
 def get_all_notes() -> list:
     return get_sheet().get_all_records()
 
 def update_row(row_index: int, note: dict):
-    get_sheet().update(f"A{row_index}:G{row_index}", [[
+    get_sheet().update(f"A{row_index}:H{row_index}", [[
         note.get("theme", ""), note.get("source", ""), note.get("reference", ""),
         note.get("donnee", ""), note.get("explication", ""),
-        note.get("traduction_fr", ""), note.get("lien", ""),
+        note.get("traduction_fr", ""), note.get("lien", ""), note.get("notes_liees", ""),
     ]])
 
 def delete_row(row_index: int):
@@ -153,7 +156,33 @@ def api_update_lien():
             "theme": n.get("Thème", ""), "source": n.get("Source", ""),
             "reference": n.get("Référence", ""), "donnee": n.get("Donnée", ""),
             "explication": n.get("Explication", ""), "traduction_fr": n.get("Traduction FR", ""),
-            "lien": lien,
+            "lien": lien, "notes_liees": n.get("Notes liées", ""),
+        }
+        update_row(row, note_updated)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@flask_app.route("/api/update-note", methods=["POST"])
+def api_update_note():
+    try:
+        data = request.get_json(force=True)
+        idx = int(data.get("index", -1))
+        champs = data.get("champs", {})
+        notes = get_all_notes()
+        if idx < 0 or idx >= len(notes):
+            return jsonify({"success": False, "error": "Index invalide"}), 400
+        n = notes[idx]
+        row = idx + 2
+        note_updated = {
+            "theme": champs.get("theme", n.get("Thème", "")),
+            "source": champs.get("source", n.get("Source", "")),
+            "reference": champs.get("reference", n.get("Référence", "")),
+            "donnee": n.get("Donnée", ""),
+            "explication": champs.get("explication", n.get("Explication", "")),
+            "traduction_fr": n.get("Traduction FR", ""),
+            "lien": n.get("Lien", ""),
+            "notes_liees": n.get("Notes liées", ""),
         }
         update_row(row, note_updated)
         return jsonify({"success": True})
@@ -214,13 +243,13 @@ async def _pipeline_vocal(audio_data: bytes, mime_type: str) -> dict:
 
     data = await structurer(texte)
 
-    traduction = ""
-    if data.get("est_arabe") or contient_arabe(texte):
+    traduction = data.get("traduction_fr") or ""
+    if not traduction and contient_arabe(texte):
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
         try:
             traduction = await traduire_fr(" — ".join(parties))
         except (asyncio.TimeoutError, Exception):
-            pass  # sauvegarde sans traduction
+            pass
 
     note = {
         "theme": cap(data.get("theme") or "Autre"),
@@ -229,7 +258,8 @@ async def _pipeline_vocal(audio_data: bytes, mime_type: str) -> dict:
         "donnee": cap(data.get("donnee") or texte),
         "explication": cap(data.get("explication") or ""),
         "traduction_fr": traduction,
-        "lien": data.get("lien") or "",
+        "lien": "",
+        "notes_liees": "",
     }
 
     existing = get_all_notes()
@@ -245,9 +275,246 @@ async def _pipeline_vocal(audio_data: bytes, mime_type: str) -> dict:
             "Thème": note["theme"], "Source": note["source"],
             "Référence": note["reference"], "Donnée": note["donnee"],
             "Explication": note["explication"], "Traduction FR": note["traduction_fr"],
-            "Lien": note["lien"],
+            "Lien": note["lien"], "Notes liées": "",
         },
     }
+
+@flask_app.route("/api/photo", methods=["POST"])
+def api_photo():
+    try:
+        if 'photo' not in request.files:
+            return jsonify({"success": False, "error": "Pas de photo reçue"}), 400
+        f = request.files['photo']
+        img_data = f.read()
+        if not img_data:
+            return jsonify({"success": False, "error": "Fichier vide"}), 400
+        mime_type = (f.content_type or 'image/jpeg').split(';')[0].strip()
+        return jsonify(asyncio.run(_pipeline_photo(img_data, mime_type)))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+async def _pipeline_photo(img_data: bytes, mime_type: str) -> dict:
+    # 1. Tentative ISBN
+    isbn = await lire_isbn_gemini(img_data)
+    if isbn:
+        livre = await asyncio.to_thread(google_books, isbn)
+        if livre and livre["titre"]:
+            source = cap(f"Livre de {livre['auteur']}") if livre["auteur"] else "Livre"
+            note = {
+                "theme": "Référence",
+                "source": normaliser_source(source, get_all_notes()),
+                "reference": isbn,
+                "donnee": cap(livre["titre"]),
+                "explication": cap(livre["description"]) if livre["description"] else "",
+                "traduction_fr": "",
+                "lien": livre["lien"],
+                "notes_liees": "",
+            }
+            save_to_sheet(note)
+            return {
+                "success": True,
+                "texte_original": f"ISBN : {isbn}",
+                "note_raw": {
+                    "Thème": note["theme"], "Source": note["source"],
+                    "Référence": note["reference"], "Donnée": note["donnee"],
+                    "Explication": note["explication"], "Traduction FR": "",
+                    "Lien": note["lien"], "Notes liées": "",
+                },
+            }
+
+    # 2. Extraction de texte / note
+    themes_str = ", ".join(THEMES_PRINCIPAUX)
+    prompt_texte = (
+        "Tu es un expert OCR spécialisé en arabe et français. "
+        "Lis cette image MOT PAR MOT, de droite à gauche pour l'arabe.\n\n"
+        "ÉTAPE 1 — TRANSCRIPTION BRUTE :\n"
+        "Lis chaque ligne du texte visible sur la photo dans l'ordre exact d'apparition. "
+        "Ne saute aucun mot, ne réorganise pas, ne corrige pas. "
+        "Pour l'arabe : respecte l'ordre RTL (droite → gauche), préserve chaque lettre, "
+        "chaque voyelle (tashkeel : فَتْحَة، كَسْرَة، ضَمَّة، سُكُون، شَدَّة) exactement comme sur la photo.\n\n"
+        "ÉTAPE 2 — RETOURNE ce JSON valide sans markdown :\n"
+        "{\n"
+        f'  "theme": "parmi : {themes_str}. Sinon crée un thème pertinent.",\n'
+        '  "source": "titre de livre ou auteur visible sur la photo. null sinon.",\n'
+        '  "reference": "numéro de page si visible. null sinon.",\n'
+        '  "donnee": "si arabe : le texte arabe complet, mot par mot dans l\'ordre exact, avec tashkeel. Si français : citation ou concept principal.",\n'
+        '  "explication": "résumé du passage en 2-3 phrases dans la langue du texte.",\n'
+        '  "traduction_fr": "si arabe : traduction française complète et fidèle. Si français : null.",\n'
+        '  "texte_complet": "TOUT le texte de la photo transcrit mot par mot, ligne par ligne, sans rien omettre ni modifier."\n'
+        "}\n\n"
+        "RÈGLES CRITIQUES :\n"
+        "- Ne jamais sauter un mot, même difficile à lire → écris [?] si illisible\n"
+        "- Ne jamais inverser deux mots\n"
+        "- Arabe + traduction française sur la même photo → arabe dans donnee, traduction dans traduction_fr\n"
+        "- Manuscrit → transcris fidèlement, mot par mot"
+    )
+    try:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                client_gemini.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Part.from_bytes(data=img_data, mime_type=mime_type),
+                    prompt_texte,
+                ],
+            ),
+            timeout=45,
+        )
+        match = re.search(r"\{.*\}", response.text.strip(), re.DOTALL)
+        if not match:
+            return {"success": False, "error": "📷 Je n'arrive pas à lire le texte sur cette photo. Essaie avec une meilleure luminosité ou un cadrage plus proche."}
+        data = json.loads(match.group())
+    except asyncio.TimeoutError:
+        return {"success": False, "error": "⏱️ Analyse trop longue. Réessaie dans quelques secondes."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+    if not data.get("donnee") and not data.get("texte_complet"):
+        return {"success": False, "error": "📷 Je n'arrive pas à lire le texte sur cette photo. Essaie avec une meilleure luminosité ou un cadrage plus proche."}
+
+    note = {
+        "theme": cap(data.get("theme") or "Autre"),
+        "source": cap(data.get("source") or ""),
+        "reference": str(data.get("reference")) if data.get("reference") else "",
+        "donnee": cap(data.get("donnee") or ""),
+        "explication": cap(data.get("explication") or ""),
+        "traduction_fr": data.get("traduction_fr") or "",
+        "lien": "",
+        "notes_liees": "",
+    }
+    if note["source"]:
+        note["source"] = normaliser_source(note["source"], get_all_notes())
+    save_to_sheet(note)
+
+    return {
+        "success": True,
+        "texte_original": data.get("texte_complet") or "",
+        "note_raw": {
+            "Thème": note["theme"], "Source": note["source"],
+            "Référence": note["reference"], "Donnée": note["donnee"],
+            "Explication": note["explication"], "Traduction FR": note["traduction_fr"],
+            "Lien": note["lien"], "Notes liées": note["notes_liees"],
+        },
+    }
+
+@flask_app.route("/api/photo-multi", methods=["POST"])
+def api_photo_multi():
+    try:
+        photos = request.files.getlist('photos')
+        if not photos:
+            return jsonify({"success": False, "error": "Pas de photos reçues"}), 400
+        img_list = [(f.read(), (f.content_type or 'image/jpeg').split(';')[0].strip()) for f in photos if f]
+        img_list = [(d, m) for d, m in img_list if d]
+        if not img_list:
+            return jsonify({"success": False, "error": "Fichiers vides"}), 400
+        return jsonify(asyncio.run(_pipeline_multi_photo(img_list)))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+async def _pipeline_multi_photo(img_list: list) -> dict:
+    themes_str = ", ".join(THEMES_PRINCIPAUX)
+    n = len(img_list)
+    prompt = (
+        f"Tu reçois {n} photo(s) qui font partie du même document ou passage. "
+        "Lis-les dans l'ordre et synthétise en UNE SEULE note.\n\n"
+        "ÉTAPE 1 — Lis chaque image mot par mot dans l'ordre des photos, RTL pour l'arabe.\n\n"
+        "ÉTAPE 2 — Retourne ce JSON valide sans markdown :\n"
+        "{\n"
+        f'  "theme": "parmi : {themes_str}. Sinon crée un thème pertinent.",\n'
+        '  "source": "titre de livre ou auteur visible. null sinon.",\n'
+        '  "reference": "pages si visibles (ex: p.12-14). null sinon.",\n'
+        '  "donnee": "si arabe : texte arabe complet mot par mot avec tashkeel. Si français : citation ou concept principal.",\n'
+        '  "explication": "synthèse intelligente de tout le contenu en 2-4 phrases.",\n'
+        '  "traduction_fr": "si arabe : traduction française complète. Si français : null.",\n'
+        '  "texte_complet": "tout le texte de toutes les photos dans l\'ordre, sans rien omettre."\n'
+        "}\n\n"
+        "RÈGLES :\n"
+        "- Ne sauter aucun mot, [?] si illisible\n"
+        "- Respecter l'ordre RTL pour l'arabe\n"
+        "- Préserver le tashkeel\n"
+        "- Synthétiser en UNE seule note cohérente"
+    )
+    contents = [types.Part.from_bytes(data=d, mime_type=m) for d, m in img_list]
+    contents.append(prompt)
+    try:
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                client_gemini.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=contents,
+            ),
+            timeout=60,
+        )
+        match = re.search(r"\{.*\}", response.text.strip(), re.DOTALL)
+        if not match:
+            return {"success": False, "error": "📷 Impossible d'extraire le texte des photos."}
+        data = json.loads(match.group())
+    except asyncio.TimeoutError:
+        return {"success": False, "error": "⏱️ Analyse trop longue. Réessaie."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    if not data.get("donnee") and not data.get("texte_complet"):
+        return {"success": False, "error": "📷 Je n'arrive pas à lire le texte sur ces photos."}
+    note = {
+        "theme": cap(data.get("theme") or "Autre"),
+        "source": cap(data.get("source") or ""),
+        "reference": str(data.get("reference")) if data.get("reference") else "",
+        "donnee": cap(data.get("donnee") or ""),
+        "explication": cap(data.get("explication") or ""),
+        "traduction_fr": data.get("traduction_fr") or "",
+        "lien": "",
+        "notes_liees": "",
+    }
+    if note["source"]:
+        note["source"] = normaliser_source(note["source"], get_all_notes())
+    save_to_sheet(note)
+    return {
+        "success": True,
+        "texte_original": data.get("texte_complet") or "",
+        "note_raw": {
+            "Thème": note["theme"], "Source": note["source"],
+            "Référence": note["reference"], "Donnée": note["donnee"],
+            "Explication": note["explication"], "Traduction FR": note["traduction_fr"],
+            "Lien": note["lien"], "Notes liées": "",
+        },
+    }
+
+@flask_app.route("/api/link-notes", methods=["POST"])
+def api_link_notes():
+    try:
+        data = request.get_json(force=True)
+        idx_from = int(data.get("idx_from", -1))
+        idx_to = int(data.get("idx_to", -1))
+        notes = get_all_notes()
+        if idx_from < 0 or idx_from >= len(notes) or idx_to < 0 or idx_to >= len(notes):
+            return jsonify({"success": False, "error": "Index invalide"}), 400
+        if idx_from == idx_to:
+            return jsonify({"success": False, "error": "Impossible de lier une note à elle-même"}), 400
+        n_from = notes[idx_from]
+        n_to = notes[idx_to]
+        target_donnee = (n_to.get("Donnée") or "")[:60]
+        from_donnee = (n_from.get("Donnée") or "")[:60]
+        liens_from = n_from.get("Notes liées", "") or ""
+        if target_donnee not in liens_from:
+            liens_from = (liens_from + "|" + target_donnee).strip("|")
+        liens_to = n_to.get("Notes liées", "") or ""
+        if from_donnee not in liens_to:
+            liens_to = (liens_to + "|" + from_donnee).strip("|")
+        update_row(idx_from + 2, {
+            "theme": n_from.get("Thème", ""), "source": n_from.get("Source", ""),
+            "reference": n_from.get("Référence", ""), "donnee": n_from.get("Donnée", ""),
+            "explication": n_from.get("Explication", ""), "traduction_fr": n_from.get("Traduction FR", ""),
+            "lien": n_from.get("Lien", ""), "notes_liees": liens_from,
+        })
+        update_row(idx_to + 2, {
+            "theme": n_to.get("Thème", ""), "source": n_to.get("Source", ""),
+            "reference": n_to.get("Référence", ""), "donnee": n_to.get("Donnée", ""),
+            "explication": n_to.get("Explication", ""), "traduction_fr": n_to.get("Traduction FR", ""),
+            "lien": n_to.get("Lien", ""), "notes_liees": liens_to,
+        })
+        return jsonify({"success": True, "liens_from": liens_from, "liens_to": liens_to})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -443,29 +710,32 @@ async def detecter_intention(texte: str) -> dict:
 
 async def structurer(texte: str) -> dict:
     themes_str = ", ".join(THEMES_PRINCIPAUX)
-    prompt = (
-        "Tu es un assistant de prise de notes. Retourne UNIQUEMENT un JSON valide :\n\n"
-        "{\n"
-        f'  "theme": "thème parmi : {themes_str}. Sinon crée un thème pertinent en français",\n'
-        '  "source": "combine type ET nom : \'Livre : Atomic Habits\', \'Formation : XYZ\', \'Podcast : Huberman\', \'Film : Inception\', \'Documentaire : XYZ\', \'Verset : Sourate Al-Baqara\', \'Réflexion personnelle\'. null si absent.",\n'
-        '  "reference": "page, timestamp, sourate/verset, chapitre… null si absent",\n'
-        '  "donnee": "concept principal dans la langue du texte — si le texte est en arabe, écris en alphabet arabe (ex: التوكل), PAS en translittération. Ajoute les tashkeel (harakat) sur les mots arabes dans le champ donnee pour indiquer la prononciation correcte",\n'
-        '  "explication": "définition/contexte dans la langue du texte — si arabe, écris en arabe (الحروف العربية), null si absent",\n'
-        '  "lien": "URL mentionnée dans le texte, null si absent",\n'
-        '  "est_arabe": true ou false\n'
-        "}\n\n"
-        "- Dicte libre → déduis intelligemment chaque info.\n"
-        "- 'dans le livre X' → 'Livre : X'\n"
-        "- Ne pas dupliquer donnee et explication.\n"
-        "- Si le texte mentionne un livre, une conférence, une formation, un cours, un film ou une ressource\n"
-        "  à enregistrer comme référence (ex: 'note ce livre', 'référence', 'enregistre cette conf') :\n"
-        "  → theme = 'Référence'\n"
-        "  → donnee = titre de la ressource\n"
-        "  → source = type + auteur/organisateur (ex: 'Livre de Karl Marx', 'Conférence de Simon Sinek', 'Formation de XYZ')\n"
-        "  → explication = bref résumé ou sujet si mentionné, sinon null\n"
-        "  → lien = URL si mentionnée, sinon null\n"
-        f"Texte : {texte}"
-    )
+    est_arabe = contient_arabe(texte)
+    regle_arabe = """
+REGLE CRITIQUE si texte en arabe :
+- donnee = le mot ou citation EN ARABE original (script arabe uniquement, PAS de translittération)
+- Ajoute les tashkeel (harakat) sur les mots arabes dans donnee pour indiquer la prononciation correcte
+- Ne JAMAIS traduire dans donnee
+- traduction_fr = traduction francaise complete et obligatoire
+""" if est_arabe else ""
+
+    prompt = f"""Tu es un assistant de prise de notes expert. Analyse ce texte et retourne UNIQUEMENT un JSON valide.
+{regle_arabe}
+{{"theme": "theme parmi : {themes_str}. Sinon cree un theme en francais",
+  "source": "combine type ET nom. Ex: Livre : Atomic Habits, Podcast : Huberman, Verset : Sourate Al-Baqara, Reflexion personnelle. null si absent.",
+  "reference": "page, timestamp, sourate/verset, chapitre. null si absent",
+  "donnee": "si arabe: le mot/citation exactement en script arabe avec tashkeel. sinon: concept dans la langue du texte",
+  "explication": "contexte ou definition. null si absent",
+  "traduction_fr": "si arabe: traduction francaise complete obligatoire. sinon: null"
+}}
+
+Regles:
+- La personne dicte librement, deduis intelligemment
+- dans le livre X = source Livre : X
+- Ne pas dupliquer donnee et explication
+- Si aucune source = null
+
+Texte : {texte}"""
     try:
         response = await asyncio.wait_for(
             asyncio.to_thread(client_gemini.models.generate_content, model="gemini-2.5-flash", contents=prompt),
@@ -477,7 +747,7 @@ async def structurer(texte: str) -> dict:
     except (asyncio.TimeoutError, Exception):
         pass
     return {"theme": "Autre", "source": None, "reference": None,
-            "donnee": texte, "explication": None, "est_arabe": False}
+            "donnee": texte, "explication": None, "traduction_fr": None}
 
 async def traduire_fr(texte: str) -> str:
     if not texte:
@@ -518,8 +788,8 @@ async def traiter_note(update: Update, context, texte_brut: str):
     texte, lien = extraire_lien(texte_brut)
     msg = await update.message.reply_text("✨ Analyse en cours…")
     data = await structurer(texte)
-    traduction = ""
-    if data.get("est_arabe") or contient_arabe(texte):
+    traduction = data.get("traduction_fr") or ""
+    if not traduction and contient_arabe(texte):
         await msg.edit_text("🔄 Traduction en cours…")
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
         try:
@@ -533,7 +803,8 @@ async def traiter_note(update: Update, context, texte_brut: str):
         "donnee": cap(data.get("donnee") or texte),
         "explication": cap(data.get("explication") or ""),
         "traduction_fr": traduction,
-        "lien": lien or (data.get("lien") or ""),
+        "lien": lien or "",
+        "notes_liees": "",
     }
     source_originale = note["source"]
     if note["source"]:
@@ -598,7 +869,7 @@ async def traiter_commande(update, context, intention, texte):
             "theme": note.get("Thème", ""), "source": note.get("Source", ""),
             "reference": note.get("Référence", ""), "donnee": note.get("Donnée", ""),
             "explication": note.get("Explication", ""), "traduction_fr": note.get("Traduction FR", ""),
-            "lien": note.get("Lien", ""),
+            "lien": note.get("Lien", ""), "notes_liees": note.get("Notes liées", ""),
         }
         note_modif[champ] = valeur
         update_row(row, note_modif)
@@ -679,7 +950,7 @@ async def ajouter_lien_reference(update, context, url: str):
         "theme": n.get("Thème", ""), "source": n.get("Source", ""),
         "reference": n.get("Référence", ""), "donnee": n.get("Donnée", ""),
         "explication": n.get("Explication", ""), "traduction_fr": n.get("Traduction FR", ""),
-        "lien": url,
+        "lien": url, "notes_liees": n.get("Notes liées", ""),
     })
     await update.message.reply_text(
         f"🔗 Lien ajouté à *{target_donnee}* !\n{url}", parse_mode="Markdown"
@@ -703,6 +974,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• _\"Montre mes dernières notes\"_\n"
         "• _\"Modifie la note sur les habitudes\"_\n"
         "• _\"Supprime la note sur le stoïcisme\"_\n\n"
+        "📷 *Photo d'un livre ou document* → envoie la photo directement, j'extrais et structure la note automatiquement\\. Tu peux aussi envoyer une photo depuis ta galerie\\.\n\n"
         "*Commandes texte :*\n"
         "/notes — 5 dernières notes\n"
         "/chercher \\[mot\\] — rechercher\n"
@@ -740,46 +1012,23 @@ async def cmd_texte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await handler_principal(update, context, texte)
 
 async def cmd_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("📸 Analyse du code-barres…")
-    # Télécharge la photo la plus haute résolution disponible
+    msg = await update.message.reply_text("📸 Analyse en cours…")
     photo = update.message.photo[-1]
     fich = await context.bot.get_file(photo.file_id)
     img_bytes = bytes(await fich.download_as_bytearray())
-
-    # Lecture de l'ISBN via Gemini Vision
-    isbn = await lire_isbn_gemini(img_bytes)
-    if not isbn:
-        await msg.edit_text("🔍 Aucun code-barres ISBN détecté.\nAssure-toi que le code-barres est net et bien cadré.")
+    d = await _pipeline_photo(img_bytes, "image/jpeg")
+    if not d["success"]:
+        await msg.edit_text(d["error"])
         return
-
-    await msg.edit_text(f"📖 ISBN `{isbn}` détecté — recherche en cours…", parse_mode="Markdown")
-
-    # Interroge Google Books dans un thread
-    livre = await asyncio.to_thread(google_books, isbn)
-    if not livre or not livre["titre"]:
-        await msg.edit_text(
-            f"❌ ISBN `{isbn}` introuvable sur Google Books.\n"
-            "Le livre a bien été détecté mais ses métadonnées ne sont pas disponibles.",
-            parse_mode="Markdown",
-        )
-        return
-
-    # Construction de la note
-    source = cap(f"Livre de {livre['auteur']}") if livre["auteur"] else "Livre"
-    note = {
-        "theme": "Référence",
-        "source": normaliser_source(source, get_all_notes()),
-        "reference": isbn,
-        "donnee": cap(livre["titre"]),
-        "explication": cap(livre["description"]) if livre["description"] else "",
-        "traduction_fr": "",
-        "lien": livre["lien"],
-    }
-    save_to_sheet(note)
-    # Mémorise pour ajout de lien URL éventuel
-    context.user_data["last_ref_donnee"] = note["donnee"]
-
-    await msg.edit_text(f"✅ *Livre enregistré !*\n\n{formater(note)}", parse_mode="Markdown")
+    n = d["note_raw"]
+    note = {"theme": n["Thème"], "source": n["Source"], "reference": n["Référence"],
+            "donnee": n["Donnée"], "explication": n["Explication"],
+            "traduction_fr": n["Traduction FR"], "lien": n["Lien"]}
+    if n["Thème"] == "Référence":
+        context.user_data["last_ref_donnee"] = n["Donnée"]
+    texte_complet = d.get("texte_original") or ""
+    extrait = f"\n\n📄 *Texte extrait :*\n\"{texte_complet[:400]}{'…' if len(texte_complet) > 400 else ''}\"" if texte_complet else ""
+    await msg.edit_text(f"✅ *Note sauvegardée !*\n\n{formater(note)}{extrait}", parse_mode="Markdown")
 
 async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notes = get_all_notes()
@@ -826,8 +1075,8 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
     ancien_lien = context.user_data.get("note", {}).get("Lien", "")
     msg = await update.message.reply_text("✨ Restructuration en cours…")
     data = await structurer(texte)
-    traduction = ""
-    if data.get("est_arabe") or contient_arabe(texte):
+    traduction = data.get("traduction_fr") or ""
+    if not traduction and contient_arabe(texte):
         parties = [p for p in [data.get("donnee"), data.get("explication")] if p]
         try:
             traduction = await traduire_fr(" — ".join(parties))
@@ -840,7 +1089,8 @@ async def recevoir_correction(update: Update, context: ContextTypes.DEFAULT_TYPE
         "donnee": cap(data.get("donnee") or texte),
         "explication": cap(data.get("explication") or ""),
         "traduction_fr": traduction,
-        "lien": lien or (data.get("lien") or "") or ancien_lien,
+        "lien": lien or ancien_lien,
+        "notes_liees": context.user_data.get("note", {}).get("Notes liées", ""),
     }
     source_originale = note["source"]
     if note["source"]:

@@ -116,6 +116,22 @@ td.bold{font-weight:600}
 .btn-del-card:active{color:#ff6060;background:rgba(255,60,60,0.12)}
 .btn-del-sheet{width:100%;padding:12px;background:rgba(255,60,60,0.08);border:.5px solid rgba(255,60,60,0.25);border-radius:12px;color:rgba(255,110,110,0.8);font-size:14px;cursor:pointer;margin-top:14px;font-weight:500}
 .btn-del-sheet:active{background:rgba(255,60,60,0.16)}
+.sheet-actions{display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:8px}
+.btn-edit-sheet{background:none;border:.5px solid rgba(196,176,255,0.25);border-radius:8px;padding:6px 10px;color:var(--accent2);font-size:13px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s;flex-shrink:0}
+.btn-edit-sheet:active{background:rgba(196,176,255,0.12)}
+.edit-field{width:100%;background:rgba(255,255,255,0.07);border:.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none;margin-bottom:12px;-webkit-appearance:none;box-sizing:border-box;font-family:inherit;resize:none}
+.edit-field:focus{border-color:rgba(196,176,255,0.5);background:rgba(255,255,255,0.09)}
+.btn-save-edit{width:100%;padding:12px;background:rgba(196,176,255,0.12);border:.5px solid rgba(196,176,255,0.35);border-radius:12px;color:var(--accent2);font-size:14px;cursor:pointer;font-weight:600;margin-bottom:8px}
+.btn-save-edit:active{background:rgba(196,176,255,0.22)}
+.btn-cancel-edit{width:100%;padding:10px;background:none;border:.5px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer}
+.edit-status{text-align:center;font-size:13px;color:var(--accent2);padding:6px 0;display:none}
+.link-result{padding:10px 12px;background:rgba(255,255,255,0.04);border:.5px solid rgba(255,255,255,0.08);border-radius:10px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s}
+.link-result:active{background:rgba(139,111,255,0.12)}
+.link-result-theme{font-size:10px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.6px}
+.link-result-donnee{font-size:14px;color:rgba(255,255,255,.75);margin-top:3px;line-height:1.4}
+.link-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.link-chip{background:rgba(139,111,255,0.12);border:.5px solid rgba(139,111,255,0.3);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--accent2);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.link-chip:active{background:rgba(139,111,255,0.22)}
 .btn-del-confirm{width:100%;padding:14px;background:rgba(255,60,60,0.15);border:.5px solid rgba(255,60,60,0.4);border-radius:14px;color:#ff7070;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:10px}
 .btn-del-confirm:active{background:rgba(255,60,60,0.25)}
 #lien-input{width:100%;background:rgba(255,255,255,0.07);border:.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;color:#fff;font-size:14px;outline:none;margin-bottom:16px;-webkit-appearance:none;box-sizing:border-box}
@@ -128,6 +144,18 @@ td.bold{font-weight:600}
 .import-fab{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));right:84px;width:46px;height:46px;border-radius:50%;background:rgba(139,111,255,0.18);border:.5px solid rgba(139,111,255,0.45);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;box-shadow:0 2px 12px rgba(107,78,255,0.25);-webkit-tap-highlight-color:transparent;transition:background .15s}
 .import-fab:active{background:rgba(139,111,255,0.35)}
 .import-fab svg{width:19px;height:19px;stroke:#C4B0FF;fill:none;stroke-width:2;pointer-events:none}
+.photo-fab{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));right:140px;width:46px;height:46px;border-radius:50%;background:rgba(139,111,255,0.15);border:.5px solid rgba(139,111,255,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;-webkit-tap-highlight-color:transparent;transition:background .15s}
+.photo-fab:active{background:rgba(139,111,255,0.28)}
+.photo-fab svg{width:20px;height:20px;stroke:var(--accent2);fill:none;stroke-width:2;pointer-events:none}
+#crop-overlay{position:fixed;inset:0;background:#000;z-index:200;display:none;flex-direction:column}
+#crop-overlay.open{display:flex}
+#crop-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;flex-shrink:0;background:rgba(22,18,48,.95)}
+#crop-header span{color:#fff;font-size:15px;font-weight:600;letter-spacing:-.2px}
+.crop-act{background:none;border:none;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer;padding:6px 4px;-webkit-tap-highlight-color:transparent}
+#crop-viewport{flex:1;position:relative;overflow:hidden;touch-action:none;cursor:grab;background:#000}
+#crop-viewport:active{cursor:grabbing}
+#crop-img{position:absolute;top:0;left:0;transform-origin:0 0;max-width:none;max-height:none;user-select:none;-webkit-user-drag:none;pointer-events:none}
+#crop-hint{text-align:center;color:rgba(255,255,255,0.3);font-size:11px;padding:10px 16px;flex-shrink:0;background:rgba(22,18,48,.95)}
 .mic-tip{position:fixed;bottom:calc(138px + env(safe-area-inset-bottom,0px));right:14px;background:rgba(22,18,48,.95);border:.5px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 13px;font-size:12px;color:#fff;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:25;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
 .mic-tip.on{opacity:1}
 /* ── Résultat vocal ── */
@@ -140,6 +168,15 @@ td.bold{font-weight:600}
 </head>
 <body>
 <canvas id="canvas"></canvas>
+<div id="crop-overlay">
+  <div id="crop-header">
+    <button class="crop-act" onclick="cancelCrop()">Annuler</button>
+    <span id="crop-counter">Recadrer</span>
+    <button class="crop-act" onclick="confirmCrop()">Envoyer ✓</button>
+  </div>
+  <div id="crop-viewport"><img id="crop-img" alt=""></div>
+  <div id="crop-hint">Pincer pour zoomer · Glisser pour recadrer</div>
+</div>
 <div class="header">
   <div class="header-top">
     <div class="logo">
@@ -173,6 +210,10 @@ td.bold{font-weight:600}
   <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
 </button>
 <input type="file" id="audio-file-input" accept="audio/*" style="display:none" onchange="importAudioFile(this)">
+<input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFile(event)">
+<button class="photo-fab" id="photo-fab" onclick="document.getElementById('photo-input').click()" aria-label="Prendre une photo">
+  <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+</button>
 <div class="overlay" id="del-overlay" onclick="handleDelOverlayClick(event)">
   <div class="sheet"><div class="handle"></div>
     <div class="sheet-body" style="padding:0 18px 24px">
@@ -310,7 +351,9 @@ async function openSheet(idx){
   const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${esc(n['Traduction FR'])}</div>`:'';
   const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${esc(n['Explication'])}</div>`:'';
   const ref=n['Référence']?`<div class="slabel">Référence</div><div class="svalue">${esc(n['Référence'])}</div>`:'';
-  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}<button class="btn-del-sheet" onclick="document.getElementById('overlay').classList.remove('open');confirmDelete(${idx})">🗑️ Supprimer cette note</button>`;
+  const liensNotes=(n['Notes liées']||'').split('|').filter(Boolean);
+  const liensHtml=liensNotes.length?`<div class="slabel">Notes liées</div><div class="link-chips">${liensNotes.map(d=>`<span class="link-chip" onclick="searchAndOpenNote(${idx},'${esc(d.replace(/'/g,"\\'"))}')">${esc(d.length>40?d.substring(0,40)+'…':d)}</span>`).join('')}</div>`:'';
+  document.getElementById('sheet-body').innerHTML=`<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>${ref}<div class="sdivider"></div>${expl}${trad}${lien}${liensHtml}<div class="sheet-actions"><button class="btn-del-sheet" style="margin-top:0;flex:1" onclick="document.getElementById('overlay').classList.remove('open');confirmDelete(${idx})">🗑️ Supprimer</button><button class="btn-edit-sheet" onclick="openLinkMode(${idx})" title="Lier">🔗</button><button class="btn-edit-sheet" onclick="openEditMode(${idx})">✏️</button></div>`;
   document.getElementById('overlay').classList.add('open');
 }
 function handleOverlayClick(e){if(e.target===document.getElementById('overlay')){document.getElementById('overlay').classList.remove('open');if(_vocalDone){_vocalDone=false;loadNotes();}}}
@@ -346,6 +389,82 @@ function confirmDelete(idx){
 }
 function closeDelOverlay(){document.getElementById('del-overlay').classList.remove('open');_delIdx=null;}
 function handleDelOverlayClick(e){if(e.target===document.getElementById('del-overlay'))closeDelOverlay();}
+function openEditMode(idx){
+  const n=allNotes[idx];
+  const sb=document.getElementById('sheet-body');
+  sb.innerHTML=`<div style="margin-bottom:14px;font-size:11px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.8px">Modifier la note</div>
+<div class="slabel">Thème</div><input class="edit-field" id="ef-theme">
+<div class="slabel">Source</div><input class="edit-field" id="ef-source">
+<div class="slabel">Référence</div><input class="edit-field" id="ef-reference">
+<div class="slabel">Explication</div><textarea class="edit-field" id="ef-explication" rows="3"></textarea>
+<div class="edit-status" id="edit-status"></div>
+<button class="btn-save-edit" onclick="saveEdit(${idx})">✅ Sauvegarder</button>
+<button class="btn-cancel-edit" onclick="openSheet(${idx})">Annuler</button>`;
+  document.getElementById('ef-theme').value=n['Thème']||'';
+  document.getElementById('ef-source').value=n['Source']||'';
+  document.getElementById('ef-reference').value=n['Référence']||'';
+  document.getElementById('ef-explication').value=n['Explication']||'';
+}
+async function saveEdit(idx){
+  const champs={
+    theme:document.getElementById('ef-theme').value.trim(),
+    source:document.getElementById('ef-source').value.trim(),
+    reference:document.getElementById('ef-reference').value.trim(),
+    explication:document.getElementById('ef-explication').value.trim(),
+  };
+  const st=document.getElementById('edit-status');
+  st.textContent='Sauvegarde…';st.style.display='block';
+  try{
+    const r=await fetch('/api/update-note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx,champs})});
+    const j=await r.json();
+    if(j.success){
+      allNotes[idx]['Thème']=champs.theme;
+      allNotes[idx]['Source']=champs.source;
+      allNotes[idx]['Référence']=champs.reference;
+      allNotes[idx]['Explication']=champs.explication;
+      openSheet(idx);
+    }else{st.textContent='❌ '+(j.error||'Erreur');}
+  }catch(e){st.textContent='❌ Erreur réseau';}
+}
+function openLinkMode(idx){
+  const sb=document.getElementById('sheet-body');
+  sb.innerHTML=`<div style="margin-bottom:14px;font-size:11px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.8px">Lier à une autre note</div>
+<input class="edit-field" id="link-search" placeholder="Rechercher…" oninput="searchNotesForLink(${idx},this.value)" autocomplete="off">
+<div id="link-results"></div>
+<div class="edit-status" id="link-status"></div>
+<button class="btn-cancel-edit" onclick="openSheet(${idx})">Annuler</button>`;
+  setTimeout(()=>document.getElementById('link-search')?.focus(),100);
+}
+function searchNotesForLink(fromIdx,query){
+  const res=document.getElementById('link-results');
+  if(!query.trim()){res.innerHTML='';return;}
+  const q=query.toLowerCase();
+  const matches=allNotes.map((n,i)=>({n,i})).filter(({n,i})=>i!==fromIdx&&(
+    (n['Donnée']||'').toLowerCase().includes(q)||
+    (n['Thème']||'').toLowerCase().includes(q)||
+    (n['Source']||'').toLowerCase().includes(q)
+  )).slice(0,5);
+  if(!matches.length){res.innerHTML='<div style="color:rgba(255,255,255,.3);font-size:13px;padding:8px 0">Aucune note trouvée</div>';return;}
+  res.innerHTML=matches.map(({n,i})=>`<div class="link-result" onclick="saveLinkTo(${fromIdx},${i})"><div class="link-result-theme">${esc(n['Thème']||'')}</div><div class="link-result-donnee">${esc((n['Donnée']||'').substring(0,60))}${(n['Donnée']||'').length>60?'…':''}</div></div>`).join('');
+}
+async function saveLinkTo(fromIdx,toIdx){
+  const st=document.getElementById('link-status');
+  st.textContent='Liaison en cours…';st.style.display='block';
+  try{
+    const r=await fetch('/api/link-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idx_from:fromIdx,idx_to:toIdx})});
+    const d=await r.json();
+    if(d.success){
+      allNotes[fromIdx]['Notes liées']=d.liens_from;
+      allNotes[toIdx]['Notes liées']=d.liens_to;
+      st.textContent='✅ Notes liées !';
+      setTimeout(()=>openSheet(fromIdx),700);
+    }else{st.textContent='❌ '+(d.error||'Erreur');}
+  }catch(e){st.textContent='❌ Erreur réseau';}
+}
+function searchAndOpenNote(currentIdx,donnee){
+  const idx=allNotes.findIndex(n=>(n['Donnée']||'').startsWith(donnee.substring(0,40)));
+  if(idx>=0)openSheet(idx);
+}
 async function doDelete(){
   if(_delIdx===null)return;
   const idx=_delIdx;
@@ -459,16 +578,142 @@ async function saveVocalLien(){
 initMic();
 function importAudioFile(input){
   const file=input.files[0];
-  input.value=''; // reset pour permettre de re-sélectionner le même fichier
+  input.value='';
   if(!file)return;
   const maxMb=50;
-  if(file.size>maxMb*1024*1024){
-    alert(`Fichier trop lourd (max ${maxMb} Mo).`);return;
-  }
+  if(file.size>maxMb*1024*1024){alert(`Fichier trop lourd (max ${maxMb} Mo).`);return;}
   const mime=file.type||'audio/mpeg';
   const reader=new FileReader();
   reader.onload=e=>sendVocal(new Blob([e.target.result],{type:mime}));
   reader.readAsArrayBuffer(file);
+}
+// ── Photo ─────────────────────────────────────────────────────────────────────
+let _cropQueue=[],_croppedBlobs=[],_cropTotal=0;
+function handlePhotoFile(e){
+  const files=Array.from(e.target.files);
+  if(!files.length)return;
+  e.target.value='';
+  _croppedBlobs=[];_cropQueue=files.slice(1);_cropTotal=files.length;
+  _updateCropCounter();
+  openCrop(files[0]);
+}
+function _updateCropCounter(){
+  const cur=_cropTotal-_cropQueue.length;
+  document.getElementById('crop-counter').textContent=_cropTotal>1?`Photo ${cur}/${_cropTotal}`:'Recadrer';
+}
+// ── Crop ─────────────────────────────────────────────────────────────────────
+let _cropX=0,_cropY=0,_cropScale=1,_cropLastDist=0,_cropDrag=false,_cropLX=0,_cropLY=0;
+function _updateCropImg(){
+  document.getElementById('crop-img').style.transform=`translate(${_cropX}px,${_cropY}px) scale(${_cropScale})`;
+}
+function openCrop(file){
+  const img=document.getElementById('crop-img');
+  img.onload=()=>{
+    const vp=document.getElementById('crop-viewport');
+    const vpW=vp.clientWidth,vpH=vp.clientHeight;
+    _cropScale=img.naturalWidth/img.naturalHeight>vpW/vpH?vpW/img.naturalWidth:vpH/img.naturalHeight;
+    _cropX=(vpW-img.naturalWidth*_cropScale)/2;
+    _cropY=(vpH-img.naturalHeight*_cropScale)/2;
+    _updateCropImg();
+    document.getElementById('crop-overlay').classList.add('open');
+  };
+  img.src=URL.createObjectURL(file);
+}
+function cancelCrop(){
+  document.getElementById('crop-overlay').classList.remove('open');
+  document.getElementById('crop-img').src='';
+  _cropQueue=[];_croppedBlobs=[];_cropTotal=0;
+}
+function confirmCrop(){
+  const img=document.getElementById('crop-img');
+  const vp=document.getElementById('crop-viewport');
+  const w=vp.clientWidth,h=vp.clientHeight;
+  const c=document.createElement('canvas');
+  c.width=w;c.height=h;
+  c.getContext('2d').drawImage(img,_cropX,_cropY,img.naturalWidth*_cropScale,img.naturalHeight*_cropScale);
+  c.toBlob(blob=>{
+    _croppedBlobs.push(blob);
+    if(_cropQueue.length>0){
+      const next=_cropQueue.shift();
+      _updateCropCounter();
+      openCrop(next);
+    }else{
+      const blobs=[..._croppedBlobs];
+      cancelCrop();
+      blobs.length===1?sendPhoto(new File([blobs[0]],'photo.jpg',{type:'image/jpeg'})):sendPhotos(blobs);
+    }
+  },'image/jpeg',0.92);
+}
+(function(){
+  const vp=document.getElementById('crop-viewport');
+  vp.addEventListener('touchstart',e=>{
+    if(e.touches.length===1){_cropDrag=true;_cropLX=e.touches[0].clientX;_cropLY=e.touches[0].clientY;_cropLastDist=0;}
+    else if(e.touches.length===2){_cropDrag=false;_cropLastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
+  },{passive:true});
+  vp.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    if(e.touches.length===1&&_cropDrag){
+      _cropX+=e.touches[0].clientX-_cropLX;_cropY+=e.touches[0].clientY-_cropLY;
+      _cropLX=e.touches[0].clientX;_cropLY=e.touches[0].clientY;
+    }else if(e.touches.length===2&&_cropLastDist>0){
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      const cx=(e.touches[0].clientX+e.touches[1].clientX)/2,cy=(e.touches[0].clientY+e.touches[1].clientY)/2;
+      const r=d/_cropLastDist;
+      _cropX=(_cropX-cx)*r+cx;_cropY=(_cropY-cy)*r+cy;
+      _cropScale=Math.min(Math.max(_cropScale*r,0.2),8);
+      _cropLastDist=d;
+    }
+    _updateCropImg();
+  },{passive:false});
+  vp.addEventListener('touchend',()=>{_cropDrag=false;_cropLastDist=0;},{passive:true});
+  vp.addEventListener('mousedown',e=>{_cropDrag=true;_cropLX=e.clientX;_cropLY=e.clientY;});
+  window.addEventListener('mousemove',e=>{if(!_cropDrag)return;_cropX+=e.clientX-_cropLX;_cropY+=e.clientY-_cropLY;_cropLX=e.clientX;_cropLY=e.clientY;_updateCropImg();});
+  window.addEventListener('mouseup',()=>{_cropDrag=false;});
+  vp.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const r=e.deltaY<0?1.1:0.9;
+    _cropX=(_cropX-e.offsetX)*r+e.offsetX;_cropY=(_cropY-e.offsetY)*r+e.offsetY;
+    _cropScale=Math.min(Math.max(_cropScale*r,0.2),8);
+    _updateCropImg();
+  },{passive:false});
+})();
+async function sendPhoto(file){
+  const b=document.getElementById('sheet-body');
+  b.innerHTML='<div class="loading"><div class="spinner"></div><div class="loading-txt">Analyse de la photo…</div></div>';
+  document.getElementById('overlay').classList.add('open');
+  try{
+    const fd=new FormData();fd.append('photo',file,file.name);
+    const r=await fetch('/api/photo',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.success)showPhotoResult(d);
+    else b.innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">${esc(d.error||'Erreur inconnue')}</div></div>`;
+  }catch(e){
+    b.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">Erreur réseau</div></div>';
+  }
+}
+async function sendPhotos(blobs){
+  const b=document.getElementById('sheet-body');
+  b.innerHTML=`<div class="loading"><div class="spinner"></div><div class="loading-txt">Analyse des ${blobs.length} photos…</div></div>`;
+  document.getElementById('overlay').classList.add('open');
+  try{
+    const fd=new FormData();
+    blobs.forEach((blob,i)=>fd.append('photos',blob,`photo${i}.jpg`));
+    const r=await fetch('/api/photo-multi',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.success)showPhotoResult(d);
+    else b.innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">${esc(d.error||'Erreur inconnue')}</div></div>`;
+  }catch(e){
+    b.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">Erreur réseau</div></div>';
+  }
+}
+function showPhotoResult(d){
+  const n=d.note_raw;
+  const isAr=/[؀-ۿ]/.test(n['Donnée']||'');
+  const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${esc(n['Explication'])}</div>`:'';
+  const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${esc(n['Traduction FR'])}</div>`:'';
+  const texte=d.texte_original?`<div class="vocal-tx">📄 ${esc(d.texte_original.substring(0,300)+(d.texte_original.length>300?'…':''))}</div>`:'';
+  document.getElementById('sheet-body').innerHTML=`${texte}<div style="margin-bottom:8px">${badge(n['Thème'])}</div><div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div><div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div><div class="sdivider"></div>${expl}${trad}`;
+  loadNotes();
 }
 let currentLienIdx=-1;
 function openLienEditor(idx){currentLienIdx=idx;const n=allNotes[idx];document.getElementById('lien-ref-title').textContent=n['Donnée']||'';document.getElementById('lien-input').value=n['Lien']||'';document.getElementById('lien-status').style.display='none';document.getElementById('lien-overlay').classList.add('open')}
