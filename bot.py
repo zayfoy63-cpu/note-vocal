@@ -228,7 +228,9 @@ async def _pipeline_vocal(audio_data: bytes, mime_type: str) -> dict:
                     types.Part.from_bytes(data=audio_data, mime_type=mime_type),
                     "Transcris exactement ce message vocal en gardant la langue originale "
                     "(français, arabe, dialecte tunisien, anglais…). "
-                    "Réponds uniquement avec la transcription, sans aucun texte autour.",
+                    "Réponds uniquement avec la transcription, sans aucun texte autour. "
+                    "Si le texte transcrit contient des mots arabes, ajoute les voyelles (tashkeel / harakat) "
+                    "sur les mots principaux pour faciliter la lecture et la prononciation.",
                 ],
             ),
             timeout=30,
@@ -670,7 +672,9 @@ async def transcrire(file_path: str) -> str:
                 types.Part.from_bytes(data=audio_data, mime_type="audio/ogg"),
                 "Transcris exactement ce message vocal en gardant la langue originale "
                 "(français, arabe, dialecte tunisien, anglais…). "
-                "Réponds uniquement avec la transcription, sans aucun texte autour."
+                "Réponds uniquement avec la transcription, sans aucun texte autour. "
+                "Si le texte transcrit contient des mots arabes, ajoute les voyelles (tashkeel / harakat) "
+                "sur les mots principaux pour faciliter la lecture et la prononciation."
             ]
         ),
         timeout=30,
@@ -709,7 +713,8 @@ async def structurer(texte: str) -> dict:
     est_arabe = contient_arabe(texte)
     regle_arabe = """
 REGLE CRITIQUE si texte en arabe :
-- donnee = le mot ou citation EN ARABE original (script arabe uniquement)
+- donnee = le mot ou citation EN ARABE original (script arabe uniquement, PAS de translittération)
+- Ajoute les tashkeel (harakat) sur les mots arabes dans donnee pour indiquer la prononciation correcte
 - Ne JAMAIS traduire dans donnee
 - traduction_fr = traduction francaise complete et obligatoire
 """ if est_arabe else ""
@@ -719,7 +724,7 @@ REGLE CRITIQUE si texte en arabe :
 {{"theme": "theme parmi : {themes_str}. Sinon cree un theme en francais",
   "source": "combine type ET nom. Ex: Livre : Atomic Habits, Podcast : Huberman, Verset : Sourate Al-Baqara, Reflexion personnelle. null si absent.",
   "reference": "page, timestamp, sourate/verset, chapitre. null si absent",
-  "donnee": "si arabe: le mot/citation exactement en script arabe. sinon: concept dans la langue du texte",
+  "donnee": "si arabe: le mot/citation exactement en script arabe avec tashkeel. sinon: concept dans la langue du texte",
   "explication": "contexte ou definition. null si absent",
   "traduction_fr": "si arabe: traduction francaise complete obligatoire. sinon: null"
 }}

@@ -87,6 +87,7 @@ td.bold{font-weight:600}
 .slabel{font-size:10px;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;font-weight:600}
 .svalue{font-size:15px;color:rgba(255,255,255,0.78);line-height:1.65;margin-bottom:14px}
 .svalue.ar{font-size:17px;color:var(--accent2);text-align:right;direction:rtl}
+.sheet-title.ar{text-align:right;direction:rtl;font-size:22px}
 .svalue.fr{color:var(--green);font-size:14px}
 .slink{display:flex;align-items:center;gap:8px;background:rgba(139,111,255,0.1);border:.5px solid rgba(139,111,255,0.25);border-radius:10px;padding:10px 14px;color:var(--accent2);font-size:12px;text-decoration:none;word-break:break-all;margin-top:5px}
 .slink svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
@@ -140,7 +141,10 @@ td.bold{font-weight:600}
 .mic-fab.recording{background:linear-gradient(135deg,#ff5050,#cc1800);animation:mpulse 1s ease-in-out infinite}
 @keyframes mpulse{0%,100%{box-shadow:0 4px 20px rgba(255,60,60,.55)}50%{box-shadow:0 4px 32px rgba(255,60,60,.9),0 0 0 14px rgba(255,60,60,.08)}}
 .mic-fab svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;pointer-events:none}
-.photo-fab{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));right:86px;width:46px;height:46px;border-radius:50%;background:rgba(139,111,255,0.15);border:.5px solid rgba(139,111,255,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;-webkit-tap-highlight-color:transparent;transition:background .15s}
+.import-fab{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));right:84px;width:46px;height:46px;border-radius:50%;background:rgba(139,111,255,0.18);border:.5px solid rgba(139,111,255,0.45);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;box-shadow:0 2px 12px rgba(107,78,255,0.25);-webkit-tap-highlight-color:transparent;transition:background .15s}
+.import-fab:active{background:rgba(139,111,255,0.35)}
+.import-fab svg{width:19px;height:19px;stroke:#C4B0FF;fill:none;stroke-width:2;pointer-events:none}
+.photo-fab{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));right:140px;width:46px;height:46px;border-radius:50%;background:rgba(139,111,255,0.15);border:.5px solid rgba(139,111,255,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;-webkit-tap-highlight-color:transparent;transition:background .15s}
 .photo-fab:active{background:rgba(139,111,255,0.28)}
 .photo-fab svg{width:20px;height:20px;stroke:var(--accent2);fill:none;stroke-width:2;pointer-events:none}
 #crop-overlay{position:fixed;inset:0;background:#000;z-index:200;display:none;flex-direction:column}
@@ -202,6 +206,10 @@ td.bold{font-weight:600}
 <button class="mic-fab" id="mic-fab" aria-label="Enregistrer une note vocale">
   <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
 </button>
+<button class="import-fab" id="import-fab" aria-label="Importer un audio" onclick="document.getElementById('audio-file-input').click()">
+  <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+</button>
+<input type="file" id="audio-file-input" accept="audio/*" style="display:none" onchange="importAudioFile(this)">
 <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFile(event)">
 <button class="photo-fab" id="photo-fab" onclick="document.getElementById('photo-input').click()" aria-label="Prendre une photo">
   <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -535,13 +543,14 @@ async function sendVocal(blob){
 }
 function showVocalResult(d){
   const n=d.note_raw;
-  const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue">${esc(n['Explication'])}</div>`:'';
+  const isAr=/[؀-ۿ]/.test(n['Donnée']||'');
+  const expl=n['Explication']?`<div class="slabel">Explication</div><div class="svalue${isAr?' ar':''}">${esc(n['Explication'])}</div>`:'';
   const trad=n['Traduction FR']?`<div class="slabel">Traduction FR</div><div class="svalue fr">${esc(n['Traduction FR'])}</div>`:'';
   const lien=n['Lien']?`<a href="${esc(n['Lien'])}" target="_blank" rel="noopener" class="slink"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>${esc(n['Lien'])}</a>`:'';
   document.getElementById('sheet-body').innerHTML=`
 <div class="vocal-tx">🗣️ ${esc(d.transcription)}</div>
 <div style="margin-bottom:8px">${badge(n['Thème'])}</div>
-<div class="sheet-title">${esc(n['Donnée']||'')}</div>
+<div class="sheet-title ${isAr?'ar':''}">${esc(n['Donnée']||'')}</div>
 <div class="sheet-source"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>${esc(n['Source']||'Sans source')}</div>
 <div class="sdivider"></div>${expl}${trad}${lien}
 <div class="sdivider"></div>
@@ -567,6 +576,17 @@ async function saveVocalLien(){
   }catch(e){if(st)st.textContent='❌ Erreur réseau';}
 }
 initMic();
+function importAudioFile(input){
+  const file=input.files[0];
+  input.value='';
+  if(!file)return;
+  const maxMb=50;
+  if(file.size>maxMb*1024*1024){alert(`Fichier trop lourd (max ${maxMb} Mo).`);return;}
+  const mime=file.type||'audio/mpeg';
+  const reader=new FileReader();
+  reader.onload=e=>sendVocal(new Blob([e.target.result],{type:mime}));
+  reader.readAsArrayBuffer(file);
+}
 // ── Photo ─────────────────────────────────────────────────────────────────────
 let _cropQueue=[],_croppedBlobs=[],_cropTotal=0;
 function handlePhotoFile(e){
