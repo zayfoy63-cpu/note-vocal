@@ -272,6 +272,11 @@ function tc(t){for(const[k,v]of Object.entries(TC))if(t&&t.includes(k))return v;
 function te(t){for(const[k,v]of Object.entries(TE))if(t&&t.includes(k))return v;return'📝'}
 function badge(t){const[c,bg,bd]=tc(t);return`<span class="badge" style="color:${c};background:${bg};border:.5px solid ${bd}">${esc(t)||'Autre'}</span>`}
 function stype(s){if(!s)return'Autre';return s.split(':')[0].trim()||'Autre'}
+function cardTitle(n){
+  const donnee=n['Donnée']||'';
+  const raw=/[؀-ۿ]/.test(donnee)?(n['Explication']||donnee):donnee;
+  return raw.length>60?raw.substring(0,60)+'…':raw;
+}
 async function loadNotes(){
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div><div class="loading-txt">Chargement des notes…</div></div>';
   try{
@@ -315,7 +320,7 @@ function renderTable(notes,c){
   const rows=notes.map(n=>{
     const idx=noteIdx(n);
     const explRaw=(n['Explication']||'').substring(0,55)+((n['Explication']||'').length>55?'…':'');
-    return`<tr onclick="openSheet(${idx})"><td>${badge(n['Thème'])}</td><td class="muted">${esc((n['Source']||'').substring(0,22))}</td><td class="muted">${esc(n['Référence']||'')}</td><td class="bold">${esc((n['Donnée']||'').substring(0,38))}</td><td class="muted">${esc(explRaw)}</td></tr>`;
+    return`<tr onclick="openSheet(${idx})"><td>${badge(n['Thème'])}</td><td class="muted">${esc((n['Source']||'').substring(0,22))}</td><td class="muted">${esc(n['Référence']||'')}</td><td class="bold">${esc(cardTitle(n))}</td><td class="muted">${esc(explRaw)}</td></tr>`;
   }).join('');
   c.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Thème</th><th>Source</th><th>Réf.</th><th>Donnée</th><th>Explication</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -333,7 +338,7 @@ function renderList(notes,c){
     const hasLien=!!(n['Lien']);
     const lienBtn=theme==='Référence'?`<button class="btn-add-lien" onclick="event.stopPropagation();openLienEditor(${idx})">${hasLien?'✏️ Modifier le lien':'🔗 Ajouter un lien'}</button>`:'';
     const footer=`<div class="ncard-footer">${lienBtn}<button class="btn-del-card" onclick="event.stopPropagation();confirmDelete(${idx})" title="Supprimer">🗑️</button></div>`;
-    return`<div class="ncard" onclick="openSheet(${idx})"><div class="ncard-top"><div class="ncard-title">${esc(n['Donnée']||'')}</div><div class="ncard-badges"><span class="nbadge-cat">${esc(theme)}</span>${srcBadge}</div></div>${explHtml}${metaHtml}${footer}</div>`;
+    return`<div class="ncard" onclick="openSheet(${idx})"><div class="ncard-top"><div class="ncard-title">${esc(cardTitle(n))}</div><div class="ncard-badges"><span class="nbadge-cat">${esc(theme)}</span>${srcBadge}</div></div>${explHtml}${metaHtml}${footer}</div>`;
   }).join('');
   c.innerHTML=`<div class="ncards">${html}</div>`;
 }
