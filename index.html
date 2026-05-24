@@ -147,15 +147,16 @@ td.bold{font-weight:600}
 .photo-fab{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));right:140px;width:46px;height:46px;border-radius:50%;background:rgba(139,111,255,0.15);border:.5px solid rgba(139,111,255,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;-webkit-tap-highlight-color:transparent;transition:background .15s}
 .photo-fab:active{background:rgba(139,111,255,0.28)}
 .photo-fab svg{width:20px;height:20px;stroke:var(--accent2);fill:none;stroke-width:2;pointer-events:none}
-#crop-overlay{position:fixed;inset:0;background:#000;z-index:200;display:none;flex-direction:column}
-#crop-overlay.open{display:flex}
-#crop-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;flex-shrink:0;background:rgba(22,18,48,.95)}
-#crop-header span{color:#fff;font-size:15px;font-weight:600;letter-spacing:-.2px}
-.crop-act{background:none;border:none;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer;padding:6px 4px;-webkit-tap-highlight-color:transparent}
-#crop-viewport{flex:1;position:relative;overflow:hidden;touch-action:none;cursor:grab;background:#000}
-#crop-viewport:active{cursor:grabbing}
-#crop-img{position:absolute;top:0;left:0;transform-origin:0 0;max-width:none;max-height:none;user-select:none;-webkit-user-drag:none;pointer-events:none}
-#crop-hint{text-align:center;color:rgba(255,255,255,0.3);font-size:11px;padding:10px 16px;flex-shrink:0;background:rgba(22,18,48,.95)}
+#photo-preview-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:200;display:none;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#photo-preview-overlay.open{display:flex}
+#photo-preview-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;flex-shrink:0;background:rgba(22,18,48,.97);border-bottom:.5px solid rgba(255,255,255,0.08)}
+#photo-preview-header span{color:#fff;font-size:15px;font-weight:600;letter-spacing:-.2px}
+.photo-act{background:none;border:none;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer;padding:8px 4px;-webkit-tap-highlight-color:transparent;min-height:44px}
+#photo-preview-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(env(safe-area-inset-bottom,20px) + 80px);display:flex;align-items:flex-start;justify-content:center;background:#000}
+#photo-preview-img{width:100%;max-height:50vh;object-fit:contain;display:block;border-radius:8px}
+#photo-preview-btns{position:fixed;bottom:0;left:0;right:0;background:rgba(22,18,48,.97);padding:12px 16px;padding-bottom:calc(env(safe-area-inset-bottom,20px) + 12px);z-index:999;display:flex;flex-direction:column;gap:8px;border-top:.5px solid rgba(255,255,255,0.08)}
+#photo-preview-btns .btn-send-photo{width:100%;min-height:50px;padding:14px;background:linear-gradient(135deg,#8B6FFF,#6B4EFF);border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+#photo-preview-btns .btn-cancel-photo{width:100%;min-height:50px;padding:12px;background:rgba(255,255,255,0.06);border:.5px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.45);font-size:15px;cursor:pointer}
 .mic-tip{position:fixed;bottom:calc(138px + env(safe-area-inset-bottom,0px));right:14px;background:rgba(22,18,48,.95);border:.5px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 13px;font-size:12px;color:#fff;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:25;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
 .mic-tip.on{opacity:1}
 /* ── Résultat vocal ── */
@@ -168,14 +169,19 @@ td.bold{font-weight:600}
 </head>
 <body>
 <canvas id="canvas"></canvas>
-<div id="crop-overlay">
-  <div id="crop-header">
-    <button class="crop-act" onclick="cancelCrop()">Annuler</button>
-    <span id="crop-counter">Recadrer</span>
-    <button class="crop-act" onclick="confirmCrop()">Envoyer ✓</button>
+<div id="photo-preview-overlay">
+  <div id="photo-preview-header">
+    <button class="photo-act" onclick="cancelPhotoPreview()">Annuler</button>
+    <span>Aperçu</span>
+    <div style="width:60px"></div>
   </div>
-  <div id="crop-viewport"><img id="crop-img" alt=""></div>
-  <div id="crop-hint">Pincer pour zoomer · Glisser pour recadrer</div>
+  <div id="photo-preview-scroll">
+    <img id="photo-preview-img" alt="">
+  </div>
+  <div id="photo-preview-btns">
+    <button class="btn-send-photo" onclick="sendPhotoFromPreview()">Envoyer ✓</button>
+    <button class="btn-cancel-photo" onclick="cancelPhotoPreview()">Annuler</button>
+  </div>
 </div>
 <div class="header">
   <div class="header-top">
@@ -210,7 +216,7 @@ td.bold{font-weight:600}
   <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
 </button>
 <input type="file" id="audio-file-input" accept="audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/aac,audio/flac,audio/x-m4a,audio/amr,audio/3gpp,audio/3gpp2,audio/opus,audio/webm,.mp3,.m4a,.wav,.ogg,.aac,.flac,.opus,.amr,.3gp,.weba,.webm" style="display:none" onchange="importAudioFile(this)">
-<input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFile(event)">
+<input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoFile(event)">
 <button class="photo-fab" id="photo-fab" onclick="document.getElementById('photo-input').click()" aria-label="Prendre une photo">
   <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
 </button>
@@ -607,95 +613,29 @@ function importAudioFile(input){
   reader.readAsArrayBuffer(file);
 }
 // ── Photo ─────────────────────────────────────────────────────────────────────
-let _cropQueue=[],_croppedBlobs=[],_cropTotal=0;
+let _pendingPhotoFile=null;
 function handlePhotoFile(e){
-  const files=Array.from(e.target.files);
-  if(!files.length)return;
+  const file=e.target.files[0];
   e.target.value='';
-  _croppedBlobs=[];_cropQueue=files.slice(1);_cropTotal=files.length;
-  _updateCropCounter();
-  openCrop(files[0]);
+  if(!file)return;
+  _pendingPhotoFile=file;
+  const img=document.getElementById('photo-preview-img');
+  const url=URL.createObjectURL(file);
+  img.onload=()=>URL.revokeObjectURL(url);
+  img.src=url;
+  document.getElementById('photo-preview-overlay').classList.add('open');
 }
-function _updateCropCounter(){
-  const cur=_cropTotal-_cropQueue.length;
-  document.getElementById('crop-counter').textContent=_cropTotal>1?`Photo ${cur}/${_cropTotal}`:'Recadrer';
+function cancelPhotoPreview(){
+  document.getElementById('photo-preview-overlay').classList.remove('open');
+  document.getElementById('photo-preview-img').src='';
+  _pendingPhotoFile=null;
 }
-// ── Crop ─────────────────────────────────────────────────────────────────────
-let _cropX=0,_cropY=0,_cropScale=1,_cropLastDist=0,_cropDrag=false,_cropLX=0,_cropLY=0;
-function _updateCropImg(){
-  document.getElementById('crop-img').style.transform=`translate(${_cropX}px,${_cropY}px) scale(${_cropScale})`;
+function sendPhotoFromPreview(){
+  if(!_pendingPhotoFile)return;
+  const file=_pendingPhotoFile;
+  cancelPhotoPreview();
+  sendPhoto(file);
 }
-function openCrop(file){
-  const img=document.getElementById('crop-img');
-  img.onload=()=>{
-    const vp=document.getElementById('crop-viewport');
-    const vpW=vp.clientWidth,vpH=vp.clientHeight;
-    _cropScale=img.naturalWidth/img.naturalHeight>vpW/vpH?vpW/img.naturalWidth:vpH/img.naturalHeight;
-    _cropX=(vpW-img.naturalWidth*_cropScale)/2;
-    _cropY=(vpH-img.naturalHeight*_cropScale)/2;
-    _updateCropImg();
-    document.getElementById('crop-overlay').classList.add('open');
-  };
-  img.src=URL.createObjectURL(file);
-}
-function cancelCrop(){
-  document.getElementById('crop-overlay').classList.remove('open');
-  document.getElementById('crop-img').src='';
-  _cropQueue=[];_croppedBlobs=[];_cropTotal=0;
-}
-function confirmCrop(){
-  const img=document.getElementById('crop-img');
-  const vp=document.getElementById('crop-viewport');
-  const w=vp.clientWidth,h=vp.clientHeight;
-  const c=document.createElement('canvas');
-  c.width=w;c.height=h;
-  c.getContext('2d').drawImage(img,_cropX,_cropY,img.naturalWidth*_cropScale,img.naturalHeight*_cropScale);
-  c.toBlob(blob=>{
-    _croppedBlobs.push(blob);
-    if(_cropQueue.length>0){
-      const next=_cropQueue.shift();
-      _updateCropCounter();
-      openCrop(next);
-    }else{
-      const blobs=[..._croppedBlobs];
-      cancelCrop();
-      blobs.length===1?sendPhoto(new File([blobs[0]],'photo.jpg',{type:'image/jpeg'})):sendPhotos(blobs);
-    }
-  },'image/jpeg',0.92);
-}
-(function(){
-  const vp=document.getElementById('crop-viewport');
-  vp.addEventListener('touchstart',e=>{
-    if(e.touches.length===1){_cropDrag=true;_cropLX=e.touches[0].clientX;_cropLY=e.touches[0].clientY;_cropLastDist=0;}
-    else if(e.touches.length===2){_cropDrag=false;_cropLastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
-  },{passive:true});
-  vp.addEventListener('touchmove',e=>{
-    e.preventDefault();
-    if(e.touches.length===1&&_cropDrag){
-      _cropX+=e.touches[0].clientX-_cropLX;_cropY+=e.touches[0].clientY-_cropLY;
-      _cropLX=e.touches[0].clientX;_cropLY=e.touches[0].clientY;
-    }else if(e.touches.length===2&&_cropLastDist>0){
-      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-      const cx=(e.touches[0].clientX+e.touches[1].clientX)/2,cy=(e.touches[0].clientY+e.touches[1].clientY)/2;
-      const r=d/_cropLastDist;
-      _cropX=(_cropX-cx)*r+cx;_cropY=(_cropY-cy)*r+cy;
-      _cropScale=Math.min(Math.max(_cropScale*r,0.2),8);
-      _cropLastDist=d;
-    }
-    _updateCropImg();
-  },{passive:false});
-  vp.addEventListener('touchend',()=>{_cropDrag=false;_cropLastDist=0;},{passive:true});
-  vp.addEventListener('mousedown',e=>{_cropDrag=true;_cropLX=e.clientX;_cropLY=e.clientY;});
-  window.addEventListener('mousemove',e=>{if(!_cropDrag)return;_cropX+=e.clientX-_cropLX;_cropY+=e.clientY-_cropLY;_cropLX=e.clientX;_cropLY=e.clientY;_updateCropImg();});
-  window.addEventListener('mouseup',()=>{_cropDrag=false;});
-  vp.addEventListener('wheel',e=>{
-    e.preventDefault();
-    const r=e.deltaY<0?1.1:0.9;
-    _cropX=(_cropX-e.offsetX)*r+e.offsetX;_cropY=(_cropY-e.offsetY)*r+e.offsetY;
-    _cropScale=Math.min(Math.max(_cropScale*r,0.2),8);
-    _updateCropImg();
-  },{passive:false});
-})();
 async function sendPhoto(file){
   const b=document.getElementById('sheet-body');
   b.innerHTML='<div class="loading"><div class="spinner"></div><div class="loading-txt">Analyse de la photo…</div></div>';
@@ -710,21 +650,7 @@ async function sendPhoto(file){
     b.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">Erreur réseau</div></div>';
   }
 }
-async function sendPhotos(blobs){
-  const b=document.getElementById('sheet-body');
-  b.innerHTML=`<div class="loading"><div class="spinner"></div><div class="loading-txt">Analyse des ${blobs.length} photos…</div></div>`;
-  document.getElementById('overlay').classList.add('open');
-  try{
-    const fd=new FormData();
-    blobs.forEach((blob,i)=>fd.append('photos',blob,`photo${i}.jpg`));
-    const r=await fetch('/api/photo-multi',{method:'POST',body:fd});
-    const d=await r.json();
-    if(d.success)showPhotoResult(d);
-    else b.innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">${esc(d.error||'Erreur inconnue')}</div></div>`;
-  }catch(e){
-    b.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">Erreur réseau</div></div>';
-  }
-}
+
 function showPhotoResult(d){
   const n=d.note_raw;
   const isAr=/[؀-ۿ]/.test(n['Donnée']||'');
