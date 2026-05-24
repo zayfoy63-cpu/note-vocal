@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Mes Notes</title>
@@ -147,15 +147,16 @@ td.bold{font-weight:600}
 .photo-fab{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));right:140px;width:46px;height:46px;border-radius:50%;background:rgba(139,111,255,0.15);border:.5px solid rgba(139,111,255,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;-webkit-tap-highlight-color:transparent;transition:background .15s}
 .photo-fab:active{background:rgba(139,111,255,0.28)}
 .photo-fab svg{width:20px;height:20px;stroke:var(--accent2);fill:none;stroke-width:2;pointer-events:none}
-#crop-overlay{position:fixed;inset:0;background:#000;z-index:200;display:none;flex-direction:column}
-#crop-overlay.open{display:flex}
-#crop-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;flex-shrink:0;background:rgba(22,18,48,.95)}
-#crop-header span{color:#fff;font-size:15px;font-weight:600;letter-spacing:-.2px}
-.crop-act{background:none;border:none;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer;padding:6px 4px;-webkit-tap-highlight-color:transparent}
-#crop-viewport{flex:1;position:relative;overflow:hidden;touch-action:none;cursor:grab;background:#000}
-#crop-viewport:active{cursor:grabbing}
-#crop-img{position:absolute;top:0;left:0;transform-origin:0 0;max-width:none;max-height:none;user-select:none;-webkit-user-drag:none;pointer-events:none}
-#crop-hint{text-align:center;color:rgba(255,255,255,0.3);font-size:11px;padding:10px 16px;flex-shrink:0;background:rgba(22,18,48,.95)}
+#photo-preview-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:200;display:none;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#photo-preview-overlay.open{display:flex}
+#photo-preview-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;flex-shrink:0;background:rgba(22,18,48,.97);border-bottom:.5px solid rgba(255,255,255,0.08)}
+#photo-preview-header span{color:#fff;font-size:15px;font-weight:600;letter-spacing:-.2px}
+.photo-act{background:none;border:none;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer;padding:8px 4px;-webkit-tap-highlight-color:transparent;min-height:44px}
+#photo-preview-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(env(safe-area-inset-bottom,20px) + 80px);display:flex;align-items:flex-start;justify-content:center;background:#000}
+#photo-preview-img{width:100%;max-height:50vh;object-fit:contain;display:block;border-radius:8px}
+#photo-preview-btns{position:fixed;bottom:0;left:0;right:0;background:rgba(22,18,48,.97);padding:12px 16px;padding-bottom:calc(env(safe-area-inset-bottom,20px) + 12px);z-index:999;display:flex;flex-direction:column;gap:8px;border-top:.5px solid rgba(255,255,255,0.08)}
+#photo-preview-btns .btn-send-photo{width:100%;min-height:50px;padding:14px;background:linear-gradient(135deg,#8B6FFF,#6B4EFF);border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+#photo-preview-btns .btn-cancel-photo{width:100%;min-height:50px;padding:12px;background:rgba(255,255,255,0.06);border:.5px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.45);font-size:15px;cursor:pointer}
 .mic-tip{position:fixed;bottom:calc(138px + env(safe-area-inset-bottom,0px));right:14px;background:rgba(22,18,48,.95);border:.5px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 13px;font-size:12px;color:#fff;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:25;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
 .mic-tip.on{opacity:1}
 /* ── Résultat vocal ── */
@@ -168,14 +169,19 @@ td.bold{font-weight:600}
 </head>
 <body>
 <canvas id="canvas"></canvas>
-<div id="crop-overlay">
-  <div id="crop-header">
-    <button class="crop-act" onclick="cancelCrop()">Annuler</button>
-    <span id="crop-counter">Recadrer</span>
-    <button class="crop-act" onclick="confirmCrop()">Envoyer ✓</button>
+<div id="photo-preview-overlay">
+  <div id="photo-preview-header">
+    <button class="photo-act" onclick="cancelPhotoPreview()">Annuler</button>
+    <span>Aperçu</span>
+    <div style="width:60px"></div>
   </div>
-  <div id="crop-viewport"><img id="crop-img" alt=""></div>
-  <div id="crop-hint">Pincer pour zoomer · Glisser pour recadrer</div>
+  <div id="photo-preview-scroll">
+    <img id="photo-preview-img" alt="">
+  </div>
+  <div id="photo-preview-btns">
+    <button class="btn-send-photo" onclick="sendPhotoFromPreview()">Envoyer ✓</button>
+    <button class="btn-cancel-photo" onclick="cancelPhotoPreview()">Annuler</button>
+  </div>
 </div>
 <div class="header">
   <div class="header-top">
@@ -209,8 +215,8 @@ td.bold{font-weight:600}
 <button class="import-fab" id="import-fab" aria-label="Importer un audio" onclick="document.getElementById('audio-file-input').click()">
   <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
 </button>
-<input type="file" id="audio-file-input" accept="audio/*" style="display:none" onchange="importAudioFile(this)">
-<input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFile(event)">
+<input type="file" id="audio-file-input" accept="audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/aac,audio/flac,audio/x-m4a,audio/amr,audio/3gpp,audio/3gpp2,audio/opus,audio/webm,.mp3,.m4a,.wav,.ogg,.aac,.flac,.opus,.amr,.3gp,.weba,.webm" style="display:none" onchange="importAudioFile(this)">
+<input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoFile(event)">
 <button class="photo-fab" id="photo-fab" onclick="document.getElementById('photo-input').click()" aria-label="Prendre une photo">
   <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
 </button>
@@ -227,9 +233,16 @@ td.bold{font-weight:600}
 <div class="overlay" id="lien-overlay" onclick="handleLienOverlayClick(event)">
   <div class="sheet"><div class="handle"></div>
     <div class="sheet-body" style="padding:0 18px 24px">
-      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px">Ajouter un lien</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.42);margin-bottom:16px" id="lien-ref-title"></div>
-      <input type="url" id="lien-input" placeholder="https://…" autocomplete="off">
+      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:4px">Ajouter un lien</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.42);margin-bottom:18px" id="lien-ref-title"></div>
+      <button class="btn-confirm" id="btn-coller" onclick="collerLien()" style="margin-bottom:10px;background:linear-gradient(135deg,rgba(139,111,255,0.35),rgba(107,78,255,0.25));border:.5px solid rgba(139,111,255,0.5)">📋 Coller depuis le presse-papiers</button>
+      <div id="lien-preview" style="display:none;background:rgba(255,255,255,0.05);border:.5px solid rgba(255,255,255,0.1);border-radius:10px;padding:10px 13px;font-size:12px;color:rgba(255,255,255,0.55);word-break:break-all;margin-bottom:10px"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="flex:1;height:.5px;background:rgba(255,255,255,0.1)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.25)">ou saisir manuellement</span>
+        <div style="flex:1;height:.5px;background:rgba(255,255,255,0.1)"></div>
+      </div>
+      <input type="text" id="lien-input" placeholder="https://…" autocomplete="off" inputmode="url" oninput="_showLienPreview(this.value.trim())">
       <div id="lien-status" style="text-align:center;font-size:13px;color:var(--accent2);padding-bottom:10px;display:none"></div>
       <button class="btn-confirm" onclick="saveLienFromEditor()">Sauvegarder</button>
       <button class="btn-cancel" onclick="closeLienOverlay()">Annuler</button>
@@ -272,6 +285,11 @@ function tc(t){for(const[k,v]of Object.entries(TC))if(t&&t.includes(k))return v;
 function te(t){for(const[k,v]of Object.entries(TE))if(t&&t.includes(k))return v;return'📝'}
 function badge(t){const[c,bg,bd]=tc(t);return`<span class="badge" style="color:${c};background:${bg};border:.5px solid ${bd}">${esc(t)||'Autre'}</span>`}
 function stype(s){if(!s)return'Autre';return s.split(':')[0].trim()||'Autre'}
+function cardTitle(n){
+  const donnee=n['Donnée']||'';
+  const raw=/[؀-ۿ]/.test(donnee)?(n['Explication']||donnee):donnee;
+  return raw.length>60?raw.substring(0,60)+'…':raw;
+}
 async function loadNotes(){
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div><div class="loading-txt">Chargement des notes…</div></div>';
   try{
@@ -315,7 +333,7 @@ function renderTable(notes,c){
   const rows=notes.map(n=>{
     const idx=noteIdx(n);
     const explRaw=(n['Explication']||'').substring(0,55)+((n['Explication']||'').length>55?'…':'');
-    return`<tr onclick="openSheet(${idx})"><td>${badge(n['Thème'])}</td><td class="muted">${esc((n['Source']||'').substring(0,22))}</td><td class="muted">${esc(n['Référence']||'')}</td><td class="bold">${esc((n['Donnée']||'').substring(0,38))}</td><td class="muted">${esc(explRaw)}</td></tr>`;
+    return`<tr onclick="openSheet(${idx})"><td>${badge(n['Thème'])}</td><td class="muted">${esc((n['Source']||'').substring(0,22))}</td><td class="muted">${esc(n['Référence']||'')}</td><td class="bold">${esc(cardTitle(n))}</td><td class="muted">${esc(explRaw)}</td></tr>`;
   }).join('');
   c.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Thème</th><th>Source</th><th>Réf.</th><th>Donnée</th><th>Explication</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -333,7 +351,7 @@ function renderList(notes,c){
     const hasLien=!!(n['Lien']);
     const lienBtn=theme==='Référence'?`<button class="btn-add-lien" onclick="event.stopPropagation();openLienEditor(${idx})">${hasLien?'✏️ Modifier le lien':'🔗 Ajouter un lien'}</button>`:'';
     const footer=`<div class="ncard-footer">${lienBtn}<button class="btn-del-card" onclick="event.stopPropagation();confirmDelete(${idx})" title="Supprimer">🗑️</button></div>`;
-    return`<div class="ncard" onclick="openSheet(${idx})"><div class="ncard-top"><div class="ncard-title">${esc(n['Donnée']||'')}</div><div class="ncard-badges"><span class="nbadge-cat">${esc(theme)}</span>${srcBadge}</div></div>${explHtml}${metaHtml}${footer}</div>`;
+    return`<div class="ncard" onclick="openSheet(${idx})"><div class="ncard-top"><div class="ncard-title">${esc(cardTitle(n))}</div><div class="ncard-badges"><span class="nbadge-cat">${esc(theme)}</span>${srcBadge}</div></div>${explHtml}${metaHtml}${footer}</div>`;
   }).join('');
   c.innerHTML=`<div class="ncards">${html}</div>`;
 }
@@ -428,24 +446,31 @@ async function saveEdit(idx){
 }
 function openLinkMode(idx){
   const sb=document.getElementById('sheet-body');
-  sb.innerHTML=`<div style="margin-bottom:14px;font-size:11px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.8px">Lier à une autre note</div>
-<input class="edit-field" id="link-search" placeholder="Rechercher…" oninput="searchNotesForLink(${idx},this.value)" autocomplete="off">
-<div id="link-results"></div>
+  sb.innerHTML=`<div style="margin-bottom:12px;font-size:11px;color:var(--accent2);opacity:.7;text-transform:uppercase;letter-spacing:.8px">Lier à une autre note</div>
+<input class="edit-field" id="link-search" placeholder="Filtrer…" oninput="renderLinkList(${idx},this.value)" autocomplete="off" style="margin-bottom:10px">
+<div id="link-results" style="max-height:52vh;overflow-y:auto"></div>
 <div class="edit-status" id="link-status"></div>
 <button class="btn-cancel-edit" onclick="openSheet(${idx})">Annuler</button>`;
-  setTimeout(()=>document.getElementById('link-search')?.focus(),100);
+  renderLinkList(idx,'');
 }
-function searchNotesForLink(fromIdx,query){
+function renderLinkList(fromIdx,query){
   const res=document.getElementById('link-results');
-  if(!query.trim()){res.innerHTML='';return;}
-  const q=query.toLowerCase();
-  const matches=allNotes.map((n,i)=>({n,i})).filter(({n,i})=>i!==fromIdx&&(
-    (n['Donnée']||'').toLowerCase().includes(q)||
-    (n['Thème']||'').toLowerCase().includes(q)||
-    (n['Source']||'').toLowerCase().includes(q)
-  )).slice(0,5);
-  if(!matches.length){res.innerHTML='<div style="color:rgba(255,255,255,.3);font-size:13px;padding:8px 0">Aucune note trouvée</div>';return;}
-  res.innerHTML=matches.map(({n,i})=>`<div class="link-result" onclick="saveLinkTo(${fromIdx},${i})"><div class="link-result-theme">${esc(n['Thème']||'')}</div><div class="link-result-donnee">${esc((n['Donnée']||'').substring(0,60))}${(n['Donnée']||'').length>60?'…':''}</div></div>`).join('');
+  const q=query.trim().toLowerCase();
+  const liees=(allNotes[fromIdx]['Notes liées']||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const matches=allNotes.map((n,i)=>({n,i})).filter(({n,i})=>{
+    if(i===fromIdx)return false;
+    if(!q)return true;
+    const titre=cardTitle(n).toLowerCase();
+    return titre.includes(q)||(n['Thème']||'').toLowerCase().includes(q)||(n['Explication']||'').toLowerCase().includes(q)||(n['Donnée']||'').toLowerCase().includes(q);
+  });
+  if(!matches.length){res.innerHTML='<div style="color:rgba(255,255,255,.3);font-size:13px;padding:8px 0">Aucune note</div>';return;}
+  res.innerHTML=matches.map(({n,i})=>{
+    const dejalie=liees.includes(cardTitle(n).substring(0,40))||liees.some(l=>l.startsWith((n['Donnée']||'').substring(0,20)));
+    return`<div class="link-result" onclick="saveLinkTo(${fromIdx},${i})" style="${dejalie?'opacity:.45':''}">
+      <div class="link-result-theme">${esc(n['Thème']||'')}${dejalie?' · déjà liée':''}</div>
+      <div class="link-result-donnee">${esc(cardTitle(n))}</div>
+    </div>`;
+  }).join('');
 }
 async function saveLinkTo(fromIdx,toIdx){
   const st=document.getElementById('link-status');
@@ -588,95 +613,29 @@ function importAudioFile(input){
   reader.readAsArrayBuffer(file);
 }
 // ── Photo ─────────────────────────────────────────────────────────────────────
-let _cropQueue=[],_croppedBlobs=[],_cropTotal=0;
+let _pendingPhotoFile=null;
 function handlePhotoFile(e){
-  const files=Array.from(e.target.files);
-  if(!files.length)return;
+  const file=e.target.files[0];
   e.target.value='';
-  _croppedBlobs=[];_cropQueue=files.slice(1);_cropTotal=files.length;
-  _updateCropCounter();
-  openCrop(files[0]);
+  if(!file)return;
+  _pendingPhotoFile=file;
+  const img=document.getElementById('photo-preview-img');
+  const url=URL.createObjectURL(file);
+  img.onload=()=>URL.revokeObjectURL(url);
+  img.src=url;
+  document.getElementById('photo-preview-overlay').classList.add('open');
 }
-function _updateCropCounter(){
-  const cur=_cropTotal-_cropQueue.length;
-  document.getElementById('crop-counter').textContent=_cropTotal>1?`Photo ${cur}/${_cropTotal}`:'Recadrer';
+function cancelPhotoPreview(){
+  document.getElementById('photo-preview-overlay').classList.remove('open');
+  document.getElementById('photo-preview-img').src='';
+  _pendingPhotoFile=null;
 }
-// ── Crop ─────────────────────────────────────────────────────────────────────
-let _cropX=0,_cropY=0,_cropScale=1,_cropLastDist=0,_cropDrag=false,_cropLX=0,_cropLY=0;
-function _updateCropImg(){
-  document.getElementById('crop-img').style.transform=`translate(${_cropX}px,${_cropY}px) scale(${_cropScale})`;
+function sendPhotoFromPreview(){
+  if(!_pendingPhotoFile)return;
+  const file=_pendingPhotoFile;
+  cancelPhotoPreview();
+  sendPhoto(file);
 }
-function openCrop(file){
-  const img=document.getElementById('crop-img');
-  img.onload=()=>{
-    const vp=document.getElementById('crop-viewport');
-    const vpW=vp.clientWidth,vpH=vp.clientHeight;
-    _cropScale=img.naturalWidth/img.naturalHeight>vpW/vpH?vpW/img.naturalWidth:vpH/img.naturalHeight;
-    _cropX=(vpW-img.naturalWidth*_cropScale)/2;
-    _cropY=(vpH-img.naturalHeight*_cropScale)/2;
-    _updateCropImg();
-    document.getElementById('crop-overlay').classList.add('open');
-  };
-  img.src=URL.createObjectURL(file);
-}
-function cancelCrop(){
-  document.getElementById('crop-overlay').classList.remove('open');
-  document.getElementById('crop-img').src='';
-  _cropQueue=[];_croppedBlobs=[];_cropTotal=0;
-}
-function confirmCrop(){
-  const img=document.getElementById('crop-img');
-  const vp=document.getElementById('crop-viewport');
-  const w=vp.clientWidth,h=vp.clientHeight;
-  const c=document.createElement('canvas');
-  c.width=w;c.height=h;
-  c.getContext('2d').drawImage(img,_cropX,_cropY,img.naturalWidth*_cropScale,img.naturalHeight*_cropScale);
-  c.toBlob(blob=>{
-    _croppedBlobs.push(blob);
-    if(_cropQueue.length>0){
-      const next=_cropQueue.shift();
-      _updateCropCounter();
-      openCrop(next);
-    }else{
-      const blobs=[..._croppedBlobs];
-      cancelCrop();
-      blobs.length===1?sendPhoto(new File([blobs[0]],'photo.jpg',{type:'image/jpeg'})):sendPhotos(blobs);
-    }
-  },'image/jpeg',0.92);
-}
-(function(){
-  const vp=document.getElementById('crop-viewport');
-  vp.addEventListener('touchstart',e=>{
-    if(e.touches.length===1){_cropDrag=true;_cropLX=e.touches[0].clientX;_cropLY=e.touches[0].clientY;_cropLastDist=0;}
-    else if(e.touches.length===2){_cropDrag=false;_cropLastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
-  },{passive:true});
-  vp.addEventListener('touchmove',e=>{
-    e.preventDefault();
-    if(e.touches.length===1&&_cropDrag){
-      _cropX+=e.touches[0].clientX-_cropLX;_cropY+=e.touches[0].clientY-_cropLY;
-      _cropLX=e.touches[0].clientX;_cropLY=e.touches[0].clientY;
-    }else if(e.touches.length===2&&_cropLastDist>0){
-      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-      const cx=(e.touches[0].clientX+e.touches[1].clientX)/2,cy=(e.touches[0].clientY+e.touches[1].clientY)/2;
-      const r=d/_cropLastDist;
-      _cropX=(_cropX-cx)*r+cx;_cropY=(_cropY-cy)*r+cy;
-      _cropScale=Math.min(Math.max(_cropScale*r,0.2),8);
-      _cropLastDist=d;
-    }
-    _updateCropImg();
-  },{passive:false});
-  vp.addEventListener('touchend',()=>{_cropDrag=false;_cropLastDist=0;},{passive:true});
-  vp.addEventListener('mousedown',e=>{_cropDrag=true;_cropLX=e.clientX;_cropLY=e.clientY;});
-  window.addEventListener('mousemove',e=>{if(!_cropDrag)return;_cropX+=e.clientX-_cropLX;_cropY+=e.clientY-_cropLY;_cropLX=e.clientX;_cropLY=e.clientY;_updateCropImg();});
-  window.addEventListener('mouseup',()=>{_cropDrag=false;});
-  vp.addEventListener('wheel',e=>{
-    e.preventDefault();
-    const r=e.deltaY<0?1.1:0.9;
-    _cropX=(_cropX-e.offsetX)*r+e.offsetX;_cropY=(_cropY-e.offsetY)*r+e.offsetY;
-    _cropScale=Math.min(Math.max(_cropScale*r,0.2),8);
-    _updateCropImg();
-  },{passive:false});
-})();
 async function sendPhoto(file){
   const b=document.getElementById('sheet-body');
   b.innerHTML='<div class="loading"><div class="spinner"></div><div class="loading-txt">Analyse de la photo…</div></div>';
@@ -691,21 +650,7 @@ async function sendPhoto(file){
     b.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">Erreur réseau</div></div>';
   }
 }
-async function sendPhotos(blobs){
-  const b=document.getElementById('sheet-body');
-  b.innerHTML=`<div class="loading"><div class="spinner"></div><div class="loading-txt">Analyse des ${blobs.length} photos…</div></div>`;
-  document.getElementById('overlay').classList.add('open');
-  try{
-    const fd=new FormData();
-    blobs.forEach((blob,i)=>fd.append('photos',blob,`photo${i}.jpg`));
-    const r=await fetch('/api/photo-multi',{method:'POST',body:fd});
-    const d=await r.json();
-    if(d.success)showPhotoResult(d);
-    else b.innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">${esc(d.error||'Erreur inconnue')}</div></div>`;
-  }catch(e){
-    b.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div style="margin-top:8px">Erreur réseau</div></div>';
-  }
-}
+
 function showPhotoResult(d){
   const n=d.note_raw;
   const isAr=/[؀-ۿ]/.test(n['Donnée']||'');
@@ -716,7 +661,43 @@ function showPhotoResult(d){
   loadNotes();
 }
 let currentLienIdx=-1;
-function openLienEditor(idx){currentLienIdx=idx;const n=allNotes[idx];document.getElementById('lien-ref-title').textContent=n['Donnée']||'';document.getElementById('lien-input').value=n['Lien']||'';document.getElementById('lien-status').style.display='none';document.getElementById('lien-overlay').classList.add('open')}
+async function openLienEditor(idx){
+  currentLienIdx=idx;
+  const n=allNotes[idx];
+  document.getElementById('lien-ref-title').textContent=cardTitle(n)||n['Donnée']||'';
+  document.getElementById('lien-input').value=n['Lien']||'';
+  document.getElementById('lien-status').style.display='none';
+  document.getElementById('lien-preview').style.display='none';
+  document.getElementById('lien-preview').textContent='';
+  document.getElementById('lien-overlay').classList.add('open');
+  // Pré-remplit depuis le presse-papiers si URL détectée
+  try{
+    const txt=(await navigator.clipboard.readText()).trim();
+    if(txt.startsWith('http')&&!n['Lien']){
+      document.getElementById('lien-input').value=txt;
+      _showLienPreview(txt);
+    }
+  }catch(_){}
+}
+async function collerLien(){
+  try{
+    const txt=(await navigator.clipboard.readText()).trim();
+    if(!txt){document.getElementById('lien-status').textContent='Presse-papiers vide';document.getElementById('lien-status').style.display='block';return;}
+    document.getElementById('lien-input').value=txt;
+    _showLienPreview(txt);
+    document.getElementById('lien-status').style.display='none';
+  }catch(e){
+    // Fallback : focus sur le champ pour que l'utilisateur colle manuellement
+    document.getElementById('lien-input').focus();
+    document.getElementById('lien-status').textContent='Collez le lien dans le champ ci-dessus (Ctrl+V / appui long)';
+    document.getElementById('lien-status').style.display='block';
+  }
+}
+function _showLienPreview(url){
+  const p=document.getElementById('lien-preview');
+  if(url.startsWith('http')){p.textContent='🔗 '+url;p.style.display='block';}
+  else{p.style.display='none';}
+}
 function closeLienOverlay(){document.getElementById('lien-overlay').classList.remove('open');currentLienIdx=-1}
 function handleLienOverlayClick(e){if(e.target===document.getElementById('lien-overlay'))closeLienOverlay()}
 async function saveLienFromEditor(){
